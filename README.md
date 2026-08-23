@@ -63,6 +63,25 @@ cd /Volumes/TriFecta && sudo bash 安装.command
 1. **系统设置 → 键盘 → 输入法** → 点 **“+”** → 搜索 **“Squirrel”**（或“鼠鬚管”）→ 添加；
 2. 用 **⌃Control + 空格**（或顶部输入法菜单）切到 **Squirrel**。
 
+### 卸载（删除本输入法）
+
+在**终端**运行以下命令即可干净移除（禁用输入源 → 杀进程 → 删除 App → 验证）：
+
+```bash
+sudo bash -c '
+echo ">>> 1. 禁用输入源"
+"/Library/Input Methods/Squirrel.app/Contents/MacOS/Squirrel" --disable-input-source 2>/dev/null || echo "  (跳过:无可禁用)"
+echo ">>> 2. 杀掉 Squirrel 进程"
+pkill -9 -f "Squirrel" 2>/dev/null || echo "  (无进程)"
+sleep 1
+echo ">>> 3. 删除已装 App"
+rm -rf "/Library/Input Methods/Squirrel.app"
+echo ">>> 4. 验证"
+if [ -d "/Library/Input Methods/Squirrel.app" ]; then echo "  ✘ 仍存在"; else echo "  ✔ 已删除"; fi
+echo ">>> 完成"
+'
+```
+
 ### 方式 B：源码构建（见下文“从源码构建”）
 
 ---
