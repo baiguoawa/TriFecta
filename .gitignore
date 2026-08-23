@@ -1,0 +1,28 @@
+# --- Build / generated ---
+/build/
+/.build/
+
+# --- Download & staging ---
+/download/
+/dist/
+*.dmg
+
+# --- Top-level placed prebuilt binaries (fetched via action-install.sh) ---
+/lib/
+/bin/
+/Frameworks/
+/package/
+
+# --- Top-level submodule copies (set up via action-install.sh) ---
+/librime/
+/plum/
+/Sparkle/
+
+# --- Xcode / OS noise ---
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.log
+*~
+.*.swp
