@@ -40,14 +40,28 @@ TriFecta 把候选字**均分成 3 组**，用**红 / 黄 / 绿**三色区分，
 
 ## 安装
 
-### 方式 A：`.dmg`（推荐，后续在 GitHub Release 提供）
-双击 `.dmg` → 运行 **安装.command**（会提示输入密码，安装到 `/Library/Input Methods` 并自动注册、构建方案数据）。
+### 方式 A：`.dmg`（推荐）
+
+> **注意：不要双击 `安装.command` 或 Squirrel.app** —— 因为 App 是 ad-hoc 签名，macOS 会在你双击时弹「无法验证是否含恶意软件」拦截。请在**终端**用一行命令安装。
+
+```bash
+# 1) 下载本 dmg，双击打开（挂载到 /Volumes/TriFecta）
+# 2) 打开 终端（Terminal），粘贴运行：
+cd /Volumes/TriFecta
+sudo bash 安装.command
+```
+
+脚本会自动：剥离隔离属性 → 复制到 `/Library/Input Methods` → 注册输入源 → 构建 Rime 方案数据 → 启用并选中。全程只需输一次登录密码，看到 `✔ 安装完成！` 即成功。（构建方案数据约 10~60 秒，窗口看似卡住是正常的，别关。）
+
+若仍被拦（提示 `com.apple.quarantine`），先手动清一次再运行：
+```bash
+xattr -dr com.apple.quarantine /Volumes/TriFecta/安装.command 2>/dev/null
+cd /Volumes/TriFecta && sudo bash 安装.command
+```
 
 安装后：
 1. **系统设置 → 键盘 → 输入法** → 点 **“+”** → 搜索 **“Squirrel”**（或“鼠鬚管”）→ 添加；
 2. 用 **⌃Control + 空格**（或顶部输入法菜单）切到 **Squirrel**。
-
-> 若首次 Gatekeeper 拦截：右键点 App →“打开”，或到 系统设置→隐私与安全 允许。
 
 ### 方式 B：源码构建（见下文“从源码构建”）
 
