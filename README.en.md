@@ -38,14 +38,29 @@ Your fingers never leave `~ 1 2 3` — no reading numbers, no reaching for 7/8/9
 
 ## Install
 
-### Way A: `.dmg` (recommended, provided in GitHub Releases)
-Open the `.dmg` → run **安装.command** (enter your password; it installs to `/Library/Input Methods` and auto-registers + builds the Rime schema data).
+### Way A: `.dmg` (recommended)
+
+> **Do NOT double-click \`安装.command\` or Squirrel.app** — because the app is ad-hoc signed, macOS shows a “cannot verify… malware” dialog on double-click. Install from the **Terminal** instead.
+
+```bash
+# 1) Download this .dmg and open it (mounts to /Volumes/TriFecta)
+# 2) Open Terminal and run:
+cd /Volumes/TriFecta
+sudo bash 安装.command
+```
+
+The script automatically: strips the quarantine attribute → copies to \`/Library/Input Methods\` → registers the input source → builds the Rime schema data → enables and selects it. You only type your password once; you’ll see \`✔ 安装完成！\` on success. (Building schema data takes ~10–60 s; the window may look frozen — that’s normal, don’t close it.)
+
+If it’s still blocked (a \`com.apple.quarantine\` message), clear it once first:
+```bash
+xattr -dr com.apple.quarantine /Volumes/TriFecta/安装.command 2>/dev/null
+cd /Volumes/TriFecta && sudo bash 安装.command
+```
 
 After installing:
 1. **System Settings → Keyboard → Input Sources** → click **“+”** → search **“Squirrel”** (or “鼠鬚管”) → add;
 2. Switch to **Squirrel** with **⌃Control + Space** (or the top input menu).
 
-> If macOS Gatekeeper blocks it on first launch: right-click the app → “Open”, or allow it under System Settings → Privacy & Security.
 
 ### Way B: build from source (see “Build from source” below)
 
