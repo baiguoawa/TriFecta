@@ -62,6 +62,25 @@ After installing:
 2. Switch to **Squirrel** with **⌃Control + Space** (or the top input menu).
 
 
+### Uninstall (remove this input method)
+
+Run this in **Terminal** to fully remove it (disable input source → kill the process → delete the app → verify):
+
+```bash
+sudo bash -c '
+echo ">>> 1. Disable input source"
+"/Library/Input Methods/Squirrel.app/Contents/MacOS/Squirrel" --disable-input-source 2>/dev/null || echo "  (skipped: nothing to disable)"
+echo ">>> 2. Kill Squirrel process"
+pkill -9 -f "Squirrel" 2>/dev/null || echo "  (no process)"
+sleep 1
+echo ">>> 3. Remove installed app"
+rm -rf "/Library/Input Methods/Squirrel.app"
+echo ">>> 4. Verify"
+if [ -d "/Library/Input Methods/Squirrel.app" ]; then echo "  ✘ still present"; else echo "  ✔ removed"; fi
+echo ">>> done"
+'
+```
+
 ### Way B: build from source (see “Build from source” below)
 
 ---
