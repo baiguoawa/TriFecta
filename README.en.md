@@ -61,7 +61,8 @@ After installing:
 | Press `1/2/3` again | Pick the exact candidate (committed), auto-return to blue |
 | `~` (a group selected) | Back to the “choose a group” step |
 | `~` (on “choose a group”) | Exit to blue |
-| `Shift` | Toggle Chinese ↔ Latin (ascii); Latin uses half-width punctuation |
+| `Shift` (tap) | Toggle Chinese ↔ Latin (ascii) |
+| `Shift` (hold) | Temporary uppercase, released back to Chinese (never stuck in ascii) |
 
 ---
 
