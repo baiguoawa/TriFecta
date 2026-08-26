@@ -26,3 +26,8 @@ DerivedData/
 *.log
 *~
 .*.swp
+
+# --- TriFectaSettings (settings/) ---
+/settings/dist/
+/settings/.build*/
+HANDOFF.md
