@@ -26,6 +26,8 @@ final class SquirrelInputController: IMKInputController {
   private var tildeGroup: Int?
   // 滑块模式：当前聚焦的三色组号(0/1/2)。候选变化时重置为 0。
   private var sliderGroupIndex = 0
+  // 用 Shift+字母 输出大写后，临时屏蔽 Shift 的中英切换一小段，防止松开 Shift 时误切换。
+  private var shiftSupressedUntil: Date = .distantPast
   private var chordKeyCodes: [UInt32] = .init(repeating: 0, count: SquirrelInputController.keyRollOver)
   private var chordModifiers: [UInt32] = .init(repeating: 0, count: SquirrelInputController.keyRollOver)
   private var chordKeyCount: Int = 0
@@ -87,6 +89,11 @@ final class SquirrelInputController: IMKInputController {
         if modifiers.contains(flag) {
           buffer.append((keycode: rimeKeycode, modifier: rimeModifiers))
         } else {
+          let isShiftRelease = (flag == .shift)
+          // 用 Shift+字母 输出大写后，短暂屏蔽 Shift 的中英切换，避免松开时误切中英。
+          if isShiftRelease, Date() < shiftSupressedUntil {
+            continue
+          }
           buffer.insert((keycode: rimeKeycode, modifier: rimeModifiers | kReleaseMask.rawValue), at: 0)
         }
       }
@@ -108,6 +115,18 @@ final class SquirrelInputController: IMKInputController {
 
       // Let client apps handle Command shortcuts.
       if modifiers.contains(.command) {
+        break
+      }
+
+      // 中文状态按住 Shift+字母：直接输出对应大写字母，不进入 Rime 拼音候选，
+      // 避免非法拼音无候选框、影响后续汉字输入。仅当 Shift 按下且为字母键时。
+      if modifiers.contains(.shift), !modifiers.contains(.control),
+         !modifiers.contains(.option), !modifiers.contains(.command),
+         let ch = event.charactersIgnoringModifiers?.first, ch.isLetter {
+        let upper = String(ch).uppercased()
+        commit(string: upper)
+        shiftSupressedUntil = Date().addingTimeInterval(1.0)   // 屏蔽 Shift 切换 1 秒
+        handled = true
         break
       }
 
