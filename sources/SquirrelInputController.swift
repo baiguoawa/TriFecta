@@ -486,12 +486,27 @@ final class SquirrelInputController: IMKInputController {
     if FileManager.default.fileExists(atPath: settingsURL.path) {
       // 设置窗口用 WindowGroup + LSUIElement：窗口关闭后进程常驻，
       // 再次 NSWorkspace.open 只激活旧进程而不重建窗口，导致"保存退出后无法唤起"。
-      // 打开前先结束残留的设置进程，保证每次都是单实例、全新起窗。
       let settingsBundleID = "im.rime.inputmethod.Squirrel.settings"
-      for app in NSRunningApplication.runningApplications(withBundleIdentifier: settingsBundleID) {
+      let running = NSRunningApplication.runningApplications(withBundleIdentifier: settingsBundleID)
+      for app in running {
         app.terminate()
       }
-      NSWorkspace.shared.open(settingsURL)
+      if running.isEmpty {
+        NSWorkspace.shared.open(settingsURL)
+      } else {
+        DispatchQueue.global(qos: .userInitiated).async {
+          let deadline = Date().addingTimeInterval(3)
+          while Date() < deadline && !running.allSatisfy({ $0.isTerminated }) {
+            usleep(80_000)
+          }
+          for app in running where !app.isTerminated {
+            app.forceTerminate()
+          }
+          DispatchQueue.main.async {
+            NSWorkspace.shared.open(settingsURL)
+          }
+        }
+      }
     } else {
       openRimeFolder()
     }
