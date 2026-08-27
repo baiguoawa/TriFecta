@@ -24,6 +24,10 @@ final class SquirrelInputController: IMKInputController {
   // 三色分组递进选字：`~` 是否开启（切换，而非长按）、当前选中的组号(0/1/2)
   private var tildeDown = false
   private var tildeGroup: Int?
+  // 滑块模式：当前聚焦的三色组号(0/1/2)。候选变化时重置为 0。
+  private var sliderGroupIndex = 0
+  // 用 Shift+字母 输出大写后，临时屏蔽 Shift 的中英切换一小段，防止松开 Shift 时误切换。
+  private var shiftSupressedUntil: Date = .distantPast
   private var chordKeyCodes: [UInt32] = .init(repeating: 0, count: SquirrelInputController.keyRollOver)
   private var chordModifiers: [UInt32] = .init(repeating: 0, count: SquirrelInputController.keyRollOver)
   private var chordKeyCount: Int = 0
@@ -85,6 +89,11 @@ final class SquirrelInputController: IMKInputController {
         if modifiers.contains(flag) {
           buffer.append((keycode: rimeKeycode, modifier: rimeModifiers))
         } else {
+          let isShiftRelease = (flag == .shift)
+          // 用 Shift+字母 输出大写后，短暂屏蔽 Shift 的中英切换，避免松开时误切中英。
+          if isShiftRelease, Date() < shiftSupressedUntil {
+            continue
+          }
           buffer.insert((keycode: rimeKeycode, modifier: rimeModifiers | kReleaseMask.rawValue), at: 0)
         }
       }
@@ -98,49 +107,26 @@ final class SquirrelInputController: IMKInputController {
     case .keyDown:
       let keyCode = event.keyCode
       let candidateCount = NSApp.squirrelAppDelegate.panel?.candidateCount ?? 0
-      // 三色分组 + ～123 递进选字：按住 `~`(keycode 50)，先按 1/2/3 选组，再按 1/2/3 选候选
-      // group_colors/enabled = false（设置窗口「～ 键三色」关闭）时整段跳过，~ 走默认行为
-      if candidateCount > 0, NSApp.squirrelAppDelegate.config?.getBool("group_colors/enabled") ?? true {
-        if keyCode == 50 {
-          // 三态切换：未开 -> 开三色；已选组 -> 返回选组状态；选组状态 -> 退出
-          if !tildeDown {
-            tildeDown = true
-            tildeGroup = nil
-            NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
-            NSApp.squirrelAppDelegate.panel?.setSelectedGroup(nil)
-          } else if tildeGroup != nil {
-            tildeGroup = nil
-            NSApp.squirrelAppDelegate.panel?.setSelectedGroup(nil)   // 回到选组，不退出三色
-          } else {
-            tildeDown = false
-            NSApp.squirrelAppDelegate.panel?.setGroupMode(false)      // 退出三色
-          }
-          handled = true   // 吞掉 `~`，不输入到拼音
-          break
-        }
-        if tildeDown, [18, 19, 20].contains(keyCode) {
-          let item = Int(keyCode) - 17                 // 18->1, 19->2, 20->3
-          if tildeGroup == nil {
-            tildeGroup = item - 1                    // 当前选中的组号 0/1/2
-            NSApp.squirrelAppDelegate.panel?.setSelectedGroup(tildeGroup)   // 组内候选按位置红/黄/绿
-          } else {
-            let groupSize = max(1, Int((Double(candidateCount) / 3.0).rounded(.up)))
-            _ = selectCandidate(tildeGroup! * groupSize + (item - 1))
-            tildeGroup = nil
-            // 完成一次“精准上字”后自动退回蓝色：长词组的剩余候选可能高频出现，用蓝色更省事；需要三色再按 `~`
-            tildeDown = false
-            NSApp.squirrelAppDelegate.panel?.setGroupMode(false)
-          }
-          handled = true
-          break
-        }
-        if tildeDown, tildeGroup != nil {
-          tildeGroup = nil   // 按住 ~ 时按了其它键：取消待选组，放行该键
-        }
+      // 三色分组递进选字：交给 handleTriColor 处理，命中则消费该键（跳过后面的 processKey）。
+      if handleTriColor(keyCode: keyCode, candidateCount: candidateCount) {
+        handled = true   // 关键：标记已消费，否则 IMK 会把键当字符输入
+        break
       }
 
       // Let client apps handle Command shortcuts.
       if modifiers.contains(.command) {
+        break
+      }
+
+      // 中文状态按住 Shift+字母：直接输出对应大写字母，不进入 Rime 拼音候选，
+      // 避免非法拼音无候选框、影响后续汉字输入。仅当 Shift 按下且为字母键时。
+      if modifiers.contains(.shift), !modifiers.contains(.control),
+         !modifiers.contains(.option), !modifiers.contains(.command),
+         let ch = event.charactersIgnoringModifiers?.first, ch.isLetter {
+        let upper = String(ch).uppercased()
+        commit(string: upper)
+        shiftSupressedUntil = Date().addingTimeInterval(1.0)   // 屏蔽 Shift 切换 1 秒
+        handled = true
         break
       }
 
@@ -171,6 +157,166 @@ final class SquirrelInputController: IMKInputController {
 
     return handled
   }
+
+
+  /// 三色分组递进选字（三模式）。返回 true 表示该键已被三色逻辑消费。
+  /// 命中后调用方应跳过后续 processKey，避免触发键/数字被当作字符输入。
+  private func handleTriColor(keyCode: UInt16, candidateCount: Int) -> Bool {
+    let triEnabled = NSApp.squirrelAppDelegate.config?.getBool("group_colors/enabled") ?? true
+    let triMode = NSApp.squirrelAppDelegate.config?.getString("group_colors/mode") ?? "trigger"
+    let triTriggerKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/trigger_key") ?? "") ?? 50
+    let dwellSecondKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/dwell_second_key") ?? "") ?? 50
+    let dwellThirdKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/dwell_third_key") ?? "") ?? 48
+    let dwellUseDefault = NSApp.squirrelAppDelegate.config?.getBool("group_colors/dwell_use_default_keys_in_group") ?? false
+    let sliderTriggerKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/slider_trigger_key") ?? "") ?? 50
+    let sliderBackKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/slider_back_key") ?? "") ?? 48
+    let groupSize = max(1, Int((Double(candidateCount) / 3.0).rounded(.up)))
+    let groupCount = min(3, (candidateCount + groupSize - 1) / groupSize)
+    let isGroupSel = [18, 19, 20].contains(keyCode)   // 1/2/3
+    let itemNum = Int(keyCode) - 17                    // 18->1, 19->2, 20->3
+
+    // 仅在有候选时处理三色（数字/触发键才与候选绑定）；无候选时放行数字等键，
+    // 避免常驻/滑块模式下无法打出 1/2/3。
+    guard triEnabled, candidateCount > 0 else { return false }
+
+    switch triMode {
+    case "dwell":
+      // ---- 常驻模式：候选出现即开一级菜单，无需触发键 ----
+      if !tildeDown {
+        tildeDown = true
+        tildeGroup = nil
+        NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
+        NSApp.squirrelAppDelegate.panel?.setSelectedGroup(nil)
+      }
+      if tildeGroup == nil {
+        // 一级菜单：前 3 个候选（第1组）用 1 / dwellSecondKey / dwellThirdKey 直接选
+        if keyCode == 18 {
+          _ = selectCandidate(0)
+          finishTriSelect()
+          return true
+        } else if keyCode == dwellSecondKey {
+          _ = selectCandidate(1)
+          finishTriSelect()
+          return true
+        } else if keyCode == dwellThirdKey {
+          _ = selectCandidate(2)
+          finishTriSelect()
+          return true
+        } else if keyCode == 19 || keyCode == 20 {
+          tildeGroup = itemNum - 1
+          NSApp.squirrelAppDelegate.panel?.setSelectedGroup(tildeGroup)
+          return true
+        }
+      } else {
+        // 已进第2/3组二级菜单
+        var consumed = false
+        if dwellUseDefault {
+          if keyCode == 18 {
+            _ = selectCandidate(tildeGroup! * groupSize + 0); consumed = true
+          } else if keyCode == dwellSecondKey {
+            _ = selectCandidate(tildeGroup! * groupSize + 1); consumed = true
+          } else if keyCode == dwellThirdKey {
+            _ = selectCandidate(tildeGroup! * groupSize + 2); consumed = true
+          } else if isGroupSel {
+            _ = selectCandidate(tildeGroup! * groupSize + (itemNum - 1)); consumed = true
+          }
+        } else {
+          if isGroupSel {
+            _ = selectCandidate(tildeGroup! * groupSize + (itemNum - 1)); consumed = true
+          }
+        }
+        if consumed {
+          finishTriSelect()
+          return true
+        }
+        return false
+      }
+      return false
+
+    case "slider":
+      // ---- 滑块模式：常驻显示某组二级菜单，触发键平移组 + 到末尾翻页 ----
+      if keyCode == sliderTriggerKey {
+        if sliderGroupIndex < groupCount - 1 {
+          sliderGroupIndex += 1
+        } else {
+          _ = page(up: false)   // 向后翻页（Rime change_page: backward=false = 下一页，= 键）
+          rimeUpdate()
+          sliderGroupIndex = 0
+        }
+        NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
+        NSApp.squirrelAppDelegate.panel?.setSelectedGroup(sliderGroupIndex)
+        return true
+      }
+      // 回退键：滑块返回上一组（到第一组则保持第一组）
+      if keyCode == sliderBackKey {
+        if sliderGroupIndex > 0 {
+          sliderGroupIndex -= 1
+        } else {
+          _ = page(up: true)   // 已在第一组：回退则向前翻一页（上一组候选）
+          rimeUpdate()
+          sliderGroupIndex = groupCount - 1
+        }
+        NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
+        NSApp.squirrelAppDelegate.panel?.setSelectedGroup(sliderGroupIndex)
+        return true
+      }
+      if !tildeDown {
+        tildeDown = true
+        NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
+        NSApp.squirrelAppDelegate.panel?.setSelectedGroup(sliderGroupIndex)
+      }
+      if isGroupSel {
+        _ = selectCandidate(sliderGroupIndex * groupSize + (itemNum - 1))
+        // 滑块模式：选字后不退出三色，保持常驻并回到第一组，便于连续选字。
+        tildeDown = true
+        sliderGroupIndex = 0
+        NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
+        NSApp.squirrelAppDelegate.panel?.setSelectedGroup(0)
+        return true
+      }
+      return false
+
+    default:
+      // ---- 触发模式：按触发键进入三色，1/2/3 选组/选字 ----
+      if keyCode == triTriggerKey {
+        if !tildeDown {
+          tildeDown = true
+          tildeGroup = nil
+          NSApp.squirrelAppDelegate.panel?.setGroupMode(true)
+          NSApp.squirrelAppDelegate.panel?.setSelectedGroup(nil)
+        } else if tildeGroup != nil {
+          tildeGroup = nil
+          NSApp.squirrelAppDelegate.panel?.setSelectedGroup(nil)
+        } else {
+          tildeDown = false
+          NSApp.squirrelAppDelegate.panel?.setGroupMode(false)
+        }
+        return true
+      }
+      if tildeDown, isGroupSel {
+        if tildeGroup == nil {
+          tildeGroup = itemNum - 1
+          NSApp.squirrelAppDelegate.panel?.setSelectedGroup(tildeGroup)
+        } else {
+          _ = selectCandidate(tildeGroup! * groupSize + (itemNum - 1))
+          finishTriSelect()
+        }
+        return true
+      }
+      if tildeDown, tildeGroup != nil {
+        tildeGroup = nil
+      }
+      return false
+    }
+  }
+
+  /// 选中候选后：清组、退出三色、回到蓝色。
+  private func finishTriSelect() {
+    tildeGroup = nil
+    tildeDown = false
+    NSApp.squirrelAppDelegate.panel?.setGroupMode(false)
+  }
+
 
   func selectCandidate(_ index: Int) -> Bool {
     let success = rimeAPI.select_candidate_on_current_page(session, index)
@@ -338,6 +484,13 @@ final class SquirrelInputController: IMKInputController {
       .appendingPathComponent("MacOS", isDirectory: true)
       .appendingPathComponent("TriFectaSettings.app", isDirectory: true)
     if FileManager.default.fileExists(atPath: settingsURL.path) {
+      // 设置窗口用 WindowGroup + LSUIElement：窗口关闭后进程常驻，
+      // 再次 NSWorkspace.open 只激活旧进程而不重建窗口，导致"保存退出后无法唤起"。
+      // 打开前先结束残留的设置进程，保证每次都是单实例、全新起窗。
+      let settingsBundleID = "im.rime.inputmethod.Squirrel.settings"
+      for app in NSRunningApplication.runningApplications(withBundleIdentifier: settingsBundleID) {
+        app.terminate()
+      }
       NSWorkspace.shared.open(settingsURL)
     } else {
       openRimeFolder()
@@ -517,6 +670,7 @@ private extension SquirrelInputController {
     if NSApp.squirrelAppDelegate.panel?.candidateCount == 0 {
       tildeDown = false
       tildeGroup = nil
+      sliderGroupIndex = 0   // 滑块模式：拼音清空时滑块回到初始组
       NSApp.squirrelAppDelegate.panel?.setGroupMode(false)
     }
     if clearReservedComments {

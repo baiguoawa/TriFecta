@@ -14,7 +14,6 @@
 //    schema_list=a,b,c
 //    input.full_shape=0|1        （默认方案的 full_shape reset）
 //    input.simplified=0|1        （默认方案的简繁 reset）
-//    shortcuts.shift=on|off
 //
 
 import Foundation
@@ -52,7 +51,6 @@ func main() {
       print("colorSchemes: \(model.colorSchemes.map { "\($0.0)(\($0.1))" }.joined(separator: ", "))")
       print("schemaList: \(model.schemaList.joined(separator: ","))")
       print("schemas: \(model.schemas.map { $0.id }.joined(separator: ","))")
-      print("shiftEnabled: \(model.shiftEnabled)")
       for (id, resets) in model.switchResets.sorted(by: { $0.key < $1.key }) {
         print("switches[\(id)]: \(resets.sorted { $0.key < $1.key }.map { "@\($0.key)=\($0.value)" }.joined(separator: " "))")
       }
@@ -65,7 +63,6 @@ func main() {
       var style: StyleValues?
       var gc: GroupColorsValues?
       var schemaList: [String]?
-      var shift: Bool?
       var resets: [String: [Int: Int]] = [:]
       let model = try RimeModel.effectiveModel(paths: repo.paths)
       for arg in args.dropFirst(2) {
@@ -121,15 +118,12 @@ func main() {
           var d = resets[schema.id] ?? [:]
           d[sw.index] = value == "1" ? 1 : 0
           resets[schema.id] = d
-        case "shortcuts.shift":
-          guard value == "on" || value == "off" else { fail("shift 应为 on/off") }
-          shift = value == "on"
         default:
           fail("未知键：\(key)")
         }
       }
       let changes = ChangeSet(style: style, groupColors: gc, schemaList: schemaList,
-                              switchResets: resets.isEmpty ? nil : resets, shiftEnabled: shift)
+                              switchResets: resets.isEmpty ? nil : resets)
       let outcome = try repo.apply(changes, deploy: false)
       print("已写入：\(outcome.filesWritten.map { $0.path }.joined(separator: " "))")
       print("squirrel.yaml 首次创建：\(outcome.squirrelYamlCreated)")

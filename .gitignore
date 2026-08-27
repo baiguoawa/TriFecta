@@ -31,3 +31,6 @@ DerivedData/
 /settings/dist/
 /settings/.build*/
 HANDOFF.md
+
+# --- Editor / IDE ---
+.vscode/

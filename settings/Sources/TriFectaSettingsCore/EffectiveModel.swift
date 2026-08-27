@@ -34,17 +34,53 @@ public struct StyleValues: Equatable {
   )
 }
 
+/// 三色分组的工作模式。
+public enum TriColorMode: String, Equatable, CaseIterable {
+  case trigger = "trigger"   // 触发键打开三色一级菜单
+  case dwell = "dwell"       // 常驻：无触发键自动打开一级菜单
+  case slider = "slider"     // 滑块：常驻显示某组二级菜单, 触发键平移组
+}
+
 public struct GroupColorsValues: Equatable {
   public var enabled: Bool
   public var red: UInt32
   public var yellow: UInt32
   public var green: UInt32
+  /// 三色分组的触发键：mac keyCode（数字）。默认 50 = ` 键（UI 显示为 ~）。
+  /// 主程序据此拦截该键在候选展开时进入三色的功能。（触发模式）
+  public var triggerKey: Int
+  /// 当前模式：trigger / dwell / slider。
+  public var mode: TriColorMode
+  /// 常驻模式：第1组第2个候选的选字键（默认 50 = ` 键，UI 显示 ~）。
+  public var dwellSecondKey: Int
+  /// 常驻模式：第1组第3个候选的选字键（默认 48 = Tab）。
+  public var dwellThirdKey: Int
+  /// 常驻模式：进第2/3组二级菜单后，用 1/2/3 选词，还是用 `~/tab（与第1组一致）。
+  public var dwellUseDefaultKeysInGroup: Bool
+  /// 滑块模式：触发键（默认 50 = ` 键，UI 显示 ~）。
+  public var sliderTriggerKey: Int
+  /// 滑块模式：回退键（返回上一组，默认 48 = Tab）。
+  public var sliderBackKey: Int
 
-  public init(enabled: Bool, red: UInt32, yellow: UInt32, green: UInt32) {
+  public init(enabled: Bool, red: UInt32, yellow: UInt32, green: UInt32,
+              triggerKey: Int = 50,
+              mode: TriColorMode = .trigger,
+              dwellSecondKey: Int = 50,
+              dwellThirdKey: Int = 48,
+              dwellUseDefaultKeysInGroup: Bool = false,
+              sliderTriggerKey: Int = 50,
+              sliderBackKey: Int = 48) {
     self.enabled = enabled
     self.red = red
     self.yellow = yellow
     self.green = green
+    self.triggerKey = triggerKey
+    self.mode = mode
+    self.dwellSecondKey = dwellSecondKey
+    self.dwellThirdKey = dwellThirdKey
+    self.dwellUseDefaultKeysInGroup = dwellUseDefaultKeysInGroup
+    self.sliderTriggerKey = sliderTriggerKey
+    self.sliderBackKey = sliderBackKey
   }
 
   /// 与 sources/SquirrelView.swift 硬编码值一致（0xAABBGGRR：alpha、blue、green、red）
@@ -61,7 +97,6 @@ public struct EffectiveModel {
   public let schemaList: [String]
   /// 用户是否已自定义方案列表（未自定义时显示推荐默认：简中 + 繁中）
   public let schemaListCustomized: Bool
-  public let shiftEnabled: Bool
   /// schemaID -> switchIndex -> 有效 reset（含 schema 默认）
   public let switchResets: [String: [Int: Int]]
   /// schemaID -> 用户 custom 文件里显式声明过 reset 的开关索引（区分"用户已保存"与"schema 默认"）
@@ -104,6 +139,12 @@ public enum RimeModel {
   public static func hexColor(_ node: Node?) -> UInt32? {
     guard let s = node?.string else { return nil }
     return hexColorValue(s)
+  }
+
+  /// 解析整数值（用于 group_colors/trigger_key 这类 keyCode）。
+  public static func intScalar(_ node: Node?) -> Int? {
+    guard let s = node?.string else { return nil }
+    return Int(s.trimmingCharacters(in: .whitespaces))
   }
 
   public static func hexDump(_ value: UInt32) -> String {
@@ -153,7 +194,14 @@ public enum RimeModel {
       enabled: boolScalar(gc?["enabled"]) ?? defaults.enabled,
       red: hexColor(gc?["red"]) ?? defaults.red,
       yellow: hexColor(gc?["yellow"]) ?? defaults.yellow,
-      green: hexColor(gc?["green"]) ?? defaults.green
+      green: hexColor(gc?["green"]) ?? defaults.green,
+      triggerKey: intScalar(gc?["trigger_key"]) ?? defaults.triggerKey,
+      mode: TriColorMode(rawValue: gc?["mode"]?.string ?? "") ?? defaults.mode,
+      dwellSecondKey: intScalar(gc?["dwell_second_key"]) ?? defaults.dwellSecondKey,
+      dwellThirdKey: intScalar(gc?["dwell_third_key"]) ?? defaults.dwellThirdKey,
+      dwellUseDefaultKeysInGroup: boolScalar(gc?["dwell_use_default_keys_in_group"]) ?? defaults.dwellUseDefaultKeysInGroup,
+      sliderTriggerKey: intScalar(gc?["slider_trigger_key"]) ?? defaults.sliderTriggerKey,
+      sliderBackKey: intScalar(gc?["slider_back_key"]) ?? defaults.sliderBackKey
     )
   }
 
@@ -190,22 +238,6 @@ public enum RimeModel {
       return true
     }
     return false
-  }
-
-  /// 有效 Shift 切换中英：用户 patch 优先，否则 SharedSupport 默认（inline_ascii = 开启）
-  public static func readShiftEnabled(paths: ConfigPaths) throws -> Bool {
-    if let patch = try readCustomPatch(paths: paths, fileName: "default.custom.yaml") {
-      // Rime 补丁键是扁平路径键（整串为一个 YAML 键）；兼容嵌套写法
-      if let v = patch["ascii_composer/switch_key/Shift_L"]?.string {
-        return v == "inline_ascii"
-      }
-      if let v = patch["ascii_composer"]?["switch_key"]?["Shift_L"]?.string {
-        return v == "inline_ascii"
-      }
-    }
-    let text = try String(contentsOf: paths.sharedDefaultYaml, encoding: .utf8)
-    let node = try compose(text)
-    return (node["ascii_composer"]?["switch_key"]?["Shift_L"]?.string ?? "inline_ascii") == "inline_ascii"
   }
 
   /// 某 schema 开关的有效 reset（用户 <schema>.custom.yaml 的 "switches/@N/reset" 优先），
@@ -249,7 +281,6 @@ public enum RimeModel {
       schemas: schemas,
       schemaList: schemaList,
       schemaListCustomized: try isSchemaListCustomized(paths: paths),
-      shiftEnabled: try readShiftEnabled(paths: paths),
       switchResets: switchResets,
       userResetPatchKeys: userResetPatchKeys,
       squirrelYamlSource: source,

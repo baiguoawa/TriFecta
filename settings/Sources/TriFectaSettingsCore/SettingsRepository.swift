@@ -9,18 +9,15 @@ public struct ChangeSet: Equatable {
   public var groupColors: GroupColorsValues?
   public var schemaList: [String]?
   public var switchResets: [String: [Int: Int]]?
-  public var shiftEnabled: Bool?
 
   public init(style: StyleValues? = nil,
               groupColors: GroupColorsValues? = nil,
               schemaList: [String]? = nil,
-              switchResets: [String: [Int: Int]]? = nil,
-              shiftEnabled: Bool? = nil) {
+              switchResets: [String: [Int: Int]]? = nil) {
     self.style = style
     self.groupColors = groupColors
     self.schemaList = schemaList
     self.switchResets = switchResets
-    self.shiftEnabled = shiftEnabled
   }
 }
 
@@ -85,6 +82,13 @@ public final class SettingsRepository {
         if cur.red != gc.red { vals.append(("red", .hexColor(gc.red))) }
         if cur.yellow != gc.yellow { vals.append(("yellow", .hexColor(gc.yellow))) }
         if cur.green != gc.green { vals.append(("green", .hexColor(gc.green))) }
+        if cur.triggerKey != gc.triggerKey { vals.append(("trigger_key", .number(String(gc.triggerKey)))) }
+        if cur.mode != gc.mode { vals.append(("mode", .string(gc.mode.rawValue))) }
+        if cur.dwellSecondKey != gc.dwellSecondKey { vals.append(("dwell_second_key", .number(String(gc.dwellSecondKey)))) }
+        if cur.dwellThirdKey != gc.dwellThirdKey { vals.append(("dwell_third_key", .number(String(gc.dwellThirdKey)))) }
+        if cur.dwellUseDefaultKeysInGroup != gc.dwellUseDefaultKeysInGroup { vals.append(("dwell_use_default_keys_in_group", .bool(gc.dwellUseDefaultKeysInGroup))) }
+        if cur.sliderTriggerKey != gc.sliderTriggerKey { vals.append(("slider_trigger_key", .number(String(gc.sliderTriggerKey)))) }
+        if cur.sliderBackKey != gc.sliderBackKey { vals.append(("slider_back_key", .number(String(gc.sliderBackKey)))) }
         if !vals.isEmpty {
           try editor.setSectionValues(section: "group_colors", values: vals)
         }
@@ -95,8 +99,8 @@ public final class SettingsRepository {
       written.append(url)
     }
 
-    // 2. default.custom.yaml（schema_list / Shift 切换）
-    if changes.schemaList != nil || changes.shiftEnabled != nil {
+    // 2. default.custom.yaml（schema_list）
+    if changes.schemaList != nil {
       let url = paths.userDefaultCustomYaml
       let (text, _) = try readOrCreate(url)
       var editor = YamlLineEditor(text: text)
@@ -105,11 +109,6 @@ public final class SettingsRepository {
           path: ["patch", "schema_list"],
           items: list.map { "- schema: \($0)" }
         )
-      }
-      if let shift = changes.shiftEnabled {
-        let v = shift ? "inline_ascii" : "noop"
-        try editor.setScalar(section: "patch", keyText: "\"ascii_composer/switch_key/Shift_L\"", value: .string(v))
-        try editor.setScalar(section: "patch", keyText: "\"ascii_composer/switch_key/Shift_R\"", value: .string(v))
       }
       let newText = editor.text
       try validateCustomText(newText, fileName: "default.custom.yaml", changes: changes)
@@ -161,6 +160,13 @@ public final class SettingsRepository {
       try assertWritten("group_colors/red", before: before.red, expected: gc.red, after: after.red)
       try assertWritten("group_colors/yellow", before: before.yellow, expected: gc.yellow, after: after.yellow)
       try assertWritten("group_colors/green", before: before.green, expected: gc.green, after: after.green)
+      try assertWritten("group_colors/trigger_key", before: before.triggerKey, expected: gc.triggerKey, after: after.triggerKey)
+      try assertWritten("group_colors/mode", before: before.mode, expected: gc.mode, after: after.mode)
+      try assertWritten("group_colors/dwell_second_key", before: before.dwellSecondKey, expected: gc.dwellSecondKey, after: after.dwellSecondKey)
+      try assertWritten("group_colors/dwell_third_key", before: before.dwellThirdKey, expected: gc.dwellThirdKey, after: after.dwellThirdKey)
+      try assertWritten("group_colors/dwell_use_default_keys_in_group", before: before.dwellUseDefaultKeysInGroup, expected: gc.dwellUseDefaultKeysInGroup, after: after.dwellUseDefaultKeysInGroup)
+      try assertWritten("group_colors/slider_trigger_key", before: before.sliderTriggerKey, expected: gc.sliderTriggerKey, after: after.sliderTriggerKey)
+      try assertWritten("group_colors/slider_back_key", before: before.sliderBackKey, expected: gc.sliderBackKey, after: after.sliderBackKey)
     }
   }
 
@@ -181,13 +187,6 @@ public final class SettingsRepository {
         let parsed = node["patch"]?["schema_list"]?.seqNodes?.compactMap { $0["schema"]?.string } ?? []
         if parsed != list {
           throw YamlLineEditor.EditorError.malformed("写入校验失败：\(fileName) schema_list 与预期不符")
-        }
-      }
-      if let shift = changes.shiftEnabled {
-        let v = shift ? "inline_ascii" : "noop"
-        let parsed = node["patch"]?["ascii_composer/switch_key/Shift_L"]?.string
-        if parsed != v {
-          throw YamlLineEditor.EditorError.malformed("写入校验失败：\(fileName) shift 设置与预期不符")
         }
       }
     }

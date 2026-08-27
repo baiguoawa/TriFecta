@@ -97,20 +97,18 @@ final class SettingsRepositoryTests: XCTestCase {
     XCTAssertEqual(model.groupColors.yellow, GroupColorsValues.defaults.yellow, "未改的颜色保持默认")
   }
 
-  func testSchemaListAndShiftApply() throws {
+  func testSchemaListApply() throws {
     let model0 = try RimeModel.effectiveModel(paths: paths)
     var list = model0.schemaList
     XCTAssertEqual(list, RimeModel.recommendedSchemaList, "未自定义时使用推荐默认（简中+繁中各一）")
     XCTAssertFalse(model0.schemaListCustomized, "未自定义方案列表")
     list = ["cangjie5", "luna_pinyin"]
-    _ = try repo.apply(ChangeSet(schemaList: list, shiftEnabled: false), deploy: false)
+    _ = try repo.apply(ChangeSet(schemaList: list), deploy: false)
     let model = try RimeModel.effectiveModel(paths: paths)
     XCTAssertEqual(model.schemaList, ["cangjie5", "luna_pinyin"])
     XCTAssertTrue(model.schemaListCustomized, "保存后视为已自定义")
-    XCTAssertFalse(model.shiftEnabled)
     let fileText = try String(contentsOf: paths.userDefaultCustomYaml, encoding: .utf8)
     XCTAssertTrue(fileText.contains("  schema_list:\n    - schema: cangjie5\n"))
-    XCTAssertTrue(fileText.contains("\"ascii_composer/switch_key/Shift_L\": noop"))
   }
 
   func testSwitchResetPerSchema() throws {
