@@ -99,7 +99,8 @@ final class SquirrelInputController: IMKInputController {
       let keyCode = event.keyCode
       let candidateCount = NSApp.squirrelAppDelegate.panel?.candidateCount ?? 0
       // 三色分组 + ～123 递进选字：按住 `~`(keycode 50)，先按 1/2/3 选组，再按 1/2/3 选候选
-      if candidateCount > 0 {
+      // group_colors/enabled = false（设置窗口「～ 键三色」关闭）时整段跳过，~ 走默认行为
+      if candidateCount > 0, NSApp.squirrelAppDelegate.config?.getBool("group_colors/enabled") ?? true {
         if keyCode == 50 {
           // 三态切换：未开 -> 开三色；已选组 -> 返回选组状态；选组状态 -> 退出
           if !tildeDown {
@@ -296,8 +297,10 @@ final class SquirrelInputController: IMKInputController {
     sync.target = self
     let logDir = NSMenuItem(title: NSLocalizedString("Logs...", comment: "Menu item"), action: #selector(openLogFolder), keyEquivalent: "")
     logDir.target = self
-    let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
+    let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openSettingsApp), keyEquivalent: "")
     setting.target = self
+    let rimeFolder = NSMenuItem(title: NSLocalizedString("Open Rime folder...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
+    rimeFolder.target = self
     let wiki = NSMenuItem(title: NSLocalizedString("Rime Wiki...", comment: "Menu item"), action: #selector(openWiki), keyEquivalent: "")
     wiki.target = self
     let update = NSMenuItem(title: NSLocalizedString("Check for updates...", comment: "Menu item"), action: #selector(checkForUpdates), keyEquivalent: "")
@@ -308,6 +311,7 @@ final class SquirrelInputController: IMKInputController {
     menu.addItem(sync)
     menu.addItem(logDir)
     menu.addItem(setting)
+    menu.addItem(rimeFolder)
     menu.addItem(wiki)
     menu.addItem(update)
 
@@ -324,6 +328,20 @@ final class SquirrelInputController: IMKInputController {
 
   @objc func openLogFolder() {
     NSApp.squirrelAppDelegate.openLogFolder()
+  }
+
+  /// 打开图形化设置窗口（TriFectaSettings.app，安装在输入法包 Contents/MacOS 内）；
+  /// 未安装时回退为打开 Rime 配置文件夹，保证手改 YAML 路径始终可用。
+  @objc func openSettingsApp() {
+    let settingsURL = Bundle.main.bundleURL
+      .appendingPathComponent("Contents", isDirectory: true)
+      .appendingPathComponent("MacOS", isDirectory: true)
+      .appendingPathComponent("TriFectaSettings.app", isDirectory: true)
+    if FileManager.default.fileExists(atPath: settingsURL.path) {
+      NSWorkspace.shared.open(settingsURL)
+    } else {
+      openRimeFolder()
+    }
   }
 
   @objc func openRimeFolder() {

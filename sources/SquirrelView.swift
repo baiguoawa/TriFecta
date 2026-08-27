@@ -45,6 +45,20 @@ final class SquirrelView: NSView {
     NSColor(calibratedRed: 0.95, green: 0.72, blue: 0.00, alpha: 0.68),   // 黄
     NSColor(calibratedRed: 0.14, green: 0.74, blue: 0.27, alpha: 0.68),   // 绿
   ]
+  // 三色分组配色从配置读取：squirrel.yaml 顶层 group_colors（0xAABBGGRR，缺省回退上方硬编码值）
+  private func loadGroupColorsFromConfig() {
+    guard let config = NSApp.squirrelAppDelegate.config else { return }
+    if config.getBool("group_colors/enabled") == false {
+      // 关闭三色：绘制侧 idx < groupColors.count 守卫使着色自然失效
+      groupColors = []
+      return
+    }
+    if let red = config.getColor("group_colors/red", inSpace: .sRGB),
+       let yellow = config.getColor("group_colors/yellow", inSpace: .sRGB),
+       let green = config.getColor("group_colors/green", inSpace: .sRGB) {
+      groupColors = [red, yellow, green]
+    }
+  }
   // 是否显示三色分组（按住 `~` 时打开）
   var showsGroups = false
   // 当前选中的组号(0/1/2)：选中该组后，组内候选按位置红/黄/绿着色，其它组变暗
@@ -145,6 +159,7 @@ final class SquirrelView: NSView {
 
   // swiftlint:disable:next cyclomatic_complexity
   override func draw(_ dirtyRect: NSRect) {
+    loadGroupColorsFromConfig()
     var backgroundPath: CGPath?
     var preeditPath: CGPath?
     // 按组分好的候选背景路径（最多 3 组），每组用对应颜色填充

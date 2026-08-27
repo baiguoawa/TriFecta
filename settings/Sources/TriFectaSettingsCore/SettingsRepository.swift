@@ -1,0 +1,257 @@
+//
+//  把设置变更集写入用户配置文件（保留其它行原字节）。
+//
+import Foundation
+import Yams
+
+public struct ChangeSet: Equatable {
+  public var style: StyleValues?
+  public var groupColors: GroupColorsValues?
+  public var schemaList: [String]?
+  public var switchResets: [String: [Int: Int]]?
+  public var shiftEnabled: Bool?
+
+  public init(style: StyleValues? = nil,
+              groupColors: GroupColorsValues? = nil,
+              schemaList: [String]? = nil,
+              switchResets: [String: [Int: Int]]? = nil,
+              shiftEnabled: Bool? = nil) {
+    self.style = style
+    self.groupColors = groupColors
+    self.schemaList = schemaList
+    self.switchResets = switchResets
+    self.shiftEnabled = shiftEnabled
+  }
+}
+
+public struct ApplyOutcome: Equatable {
+  public let filesWritten: [URL]
+  public let squirrelYamlCreated: Bool
+  public let imeRunning: Bool
+}
+
+public final class SettingsRepository {
+  public let paths: ConfigPaths
+  private let fm = FileManager.default
+
+  public init(paths: ConfigPaths) {
+    self.paths = paths
+  }
+
+  public convenience init() {
+    self.init(paths: .autodetect())
+  }
+
+  // MARK: 应用变更
+
+  public func apply(_ changes: ChangeSet, deploy: Bool = true) throws -> ApplyOutcome {
+    try fm.createDirectory(at: paths.userDir, withIntermediateDirectories: true)
+    var written: [URL] = []
+    var created = false
+
+    // 1. squirrel.yaml（style / group_colors）
+    if changes.style != nil || changes.groupColors != nil {
+      let url = paths.userSquirrelYaml
+      // 首次写入：从 SharedSupport 拷贝基线（created 标记用于提示"基线已拷贝"）
+      let (text, isNew) = try readOrCreate(url, baseline: paths.sharedSquirrelYaml)
+      created = isNew
+      let effective = try RimeModel.loadSquirrelYaml(paths: paths).node
+      var editor = YamlLineEditor(text: text)
+      if let style = changes.style {
+        let cur = RimeModel.readStyle(effective)
+        if cur.colorScheme != style.colorScheme {
+          try editor.setScalar(section: "style", keyText: "color_scheme", value: .string(style.colorScheme))
+        }
+        if cur.candidateListLayout != style.candidateListLayout {
+          try editor.setScalar(section: "style", keyText: "candidate_list_layout", value: .string(style.candidateListLayout))
+        }
+        if cur.textOrientation != style.textOrientation {
+          try editor.setScalar(section: "style", keyText: "text_orientation", value: .string(style.textOrientation))
+        }
+        if cur.fontFace != style.fontFace {
+          try editor.setScalar(section: "style", keyText: "font_face", value: .string(style.fontFace))
+        }
+        if cur.fontPoint != style.fontPoint {
+          try editor.setScalar(section: "style", keyText: "font_point", value: .number(formatNumber(style.fontPoint)))
+        }
+        if cur.candidateFormat != style.candidateFormat {
+          try editor.setScalar(section: "style", keyText: "candidate_format", value: .string(style.candidateFormat))
+        }
+      }
+      if let gc = changes.groupColors {
+        let cur = RimeModel.readGroupColors(effective)
+        var vals: [(String, YamlScalar)] = []
+        if cur.enabled != gc.enabled { vals.append(("enabled", .bool(gc.enabled))) }
+        if cur.red != gc.red { vals.append(("red", .hexColor(gc.red))) }
+        if cur.yellow != gc.yellow { vals.append(("yellow", .hexColor(gc.yellow))) }
+        if cur.green != gc.green { vals.append(("green", .hexColor(gc.green))) }
+        if !vals.isEmpty {
+          try editor.setSectionValues(section: "group_colors", values: vals)
+        }
+      }
+      let newText = editor.text
+      try validateSquirrelText(newText, changes: changes, effective: effective)
+      try atomicWrite(url, text: newText)
+      written.append(url)
+    }
+
+    // 2. default.custom.yaml（schema_list / Shift 切换）
+    if changes.schemaList != nil || changes.shiftEnabled != nil {
+      let url = paths.userDefaultCustomYaml
+      let (text, _) = try readOrCreate(url)
+      var editor = YamlLineEditor(text: text)
+      if let list = changes.schemaList {
+        try editor.replaceBlockList(
+          path: ["patch", "schema_list"],
+          items: list.map { "- schema: \($0)" }
+        )
+      }
+      if let shift = changes.shiftEnabled {
+        let v = shift ? "inline_ascii" : "noop"
+        try editor.setScalar(section: "patch", keyText: "\"ascii_composer/switch_key/Shift_L\"", value: .string(v))
+        try editor.setScalar(section: "patch", keyText: "\"ascii_composer/switch_key/Shift_R\"", value: .string(v))
+      }
+      let newText = editor.text
+      try validateCustomText(newText, fileName: "default.custom.yaml", changes: changes)
+      try atomicWrite(url, text: newText)
+      written.append(url)
+    }
+
+    // 3. <schema>.custom.yaml（switches/@N/reset）
+    for (schemaID, resets) in (changes.switchResets ?? [:]).sorted(by: { $0.key < $1.key }) where !resets.isEmpty {
+      let url = paths.userSchemaCustomYaml(schemaID)
+      let (text, _) = try readOrCreate(url)
+      var editor = YamlLineEditor(text: text)
+      for (idx, reset) in resets.sorted(by: { $0.key < $1.key }) {
+        try editor.setScalar(section: "patch", keyText: "\"switches/@\(idx)/reset\"", value: .number("\(reset)"))
+      }
+      let newText = editor.text
+      try validateCustomText(newText, fileName: "\(schemaID).custom.yaml", changes: nil)
+      try atomicWrite(url, text: newText)
+      written.append(url)
+    }
+
+    let imeRunning: Bool
+    if deploy && !written.isEmpty {
+      imeRunning = Deployer.reload()
+    } else {
+      imeRunning = Deployer.isIMERunning
+    }
+    return ApplyOutcome(filesWritten: written, squirrelYamlCreated: created, imeRunning: imeRunning)
+  }
+
+  // MARK: 校验
+
+  private func validateSquirrelText(_ text: String, changes: ChangeSet, effective: Node) throws {
+    let node = try RimeModel.compose(text)
+    if let style = changes.style {
+      let before = RimeModel.readStyle(effective)
+      let after = RimeModel.readStyle(node)
+      try assertWritten("style/color_scheme", before: before.colorScheme, expected: style.colorScheme, after: after.colorScheme)
+      try assertWritten("style/candidate_list_layout", before: before.candidateListLayout, expected: style.candidateListLayout, after: after.candidateListLayout)
+      try assertWritten("style/text_orientation", before: before.textOrientation, expected: style.textOrientation, after: after.textOrientation)
+      try assertWritten("style/font_face", before: before.fontFace, expected: style.fontFace, after: after.fontFace)
+      try assertWritten("style/font_point", before: before.fontPoint, expected: style.fontPoint, after: after.fontPoint)
+      try assertWritten("style/candidate_format", before: before.candidateFormat, expected: style.candidateFormat, after: after.candidateFormat)
+    }
+    if let gc = changes.groupColors {
+      let before = RimeModel.readGroupColors(effective)
+      let after = RimeModel.readGroupColors(node)
+      try assertWritten("group_colors/enabled", before: before.enabled, expected: gc.enabled, after: after.enabled)
+      try assertWritten("group_colors/red", before: before.red, expected: gc.red, after: after.red)
+      try assertWritten("group_colors/yellow", before: before.yellow, expected: gc.yellow, after: after.yellow)
+      try assertWritten("group_colors/green", before: before.green, expected: gc.green, after: after.green)
+    }
+  }
+
+  /// 写入校验：某键写入前与预期不同、写入后仍与预期不同，说明该键没写进去。
+  private func assertWritten<T: Equatable>(_ path: String, before: T, expected: T, after: T) throws {
+    if before != expected, after != expected {
+      throw YamlLineEditor.EditorError.malformed("写入校验失败：\(path)")
+    }
+  }
+
+  private func validateCustomText(_ text: String, fileName: String, changes: ChangeSet?) throws {
+    let node = try RimeModel.compose(text)
+    guard node["patch"] != nil else {
+      throw YamlLineEditor.EditorError.malformed("写入校验失败：\(fileName) 缺少 patch:")
+    }
+    if fileName == "default.custom.yaml", let changes = changes {
+      if let list = changes.schemaList {
+        let parsed = node["patch"]?["schema_list"]?.seqNodes?.compactMap { $0["schema"]?.string } ?? []
+        if parsed != list {
+          throw YamlLineEditor.EditorError.malformed("写入校验失败：\(fileName) schema_list 与预期不符")
+        }
+      }
+      if let shift = changes.shiftEnabled {
+        let v = shift ? "inline_ascii" : "noop"
+        let parsed = node["patch"]?["ascii_composer/switch_key/Shift_L"]?.string
+        if parsed != v {
+          throw YamlLineEditor.EditorError.malformed("写入校验失败：\(fileName) shift 设置与预期不符")
+        }
+      }
+    }
+  }
+
+  // MARK: 原子写
+
+  /// 读取已存在的用户文件；不存在时用模板创建：
+  /// `baseline` ≠ nil 时拷贝 SharedSupport 基线（squirrel.yaml 首写），否则用 `patch:\n` 骨架（custom 文件）。
+  private func readOrCreate(_ url: URL, baseline: URL? = nil) throws -> (text: String, created: Bool) {
+    if fm.fileExists(atPath: url.path) {
+      return (try String(contentsOf: url, encoding: .utf8), false)
+    }
+    let text: String
+    if let baseline = baseline {
+      text = try String(contentsOf: baseline, encoding: .utf8)
+    } else {
+      text = "patch:\n"
+    }
+    return (text, true)
+  }
+
+  private func atomicWrite(_ url: URL, text: String) throws {
+    if fm.fileExists(atPath: url.path) {
+      let bak = backupURL(for: url)
+      try? fm.removeItem(at: bak)
+      try fm.copyItem(at: url, to: bak)
+    }
+    let tmp = url.deletingLastPathComponent().appendingPathComponent(".tri-\(url.lastPathComponent).tmp")
+    try text.write(to: tmp, atomically: true, encoding: .utf8)
+    if fm.fileExists(atPath: url.path) {
+      _ = try fm.replaceItemAt(url, withItemAt: tmp)
+    } else {
+      try fm.moveItem(at: tmp, to: url)
+    }
+  }
+
+  private func backupURL(for url: URL) -> URL {
+    URL(fileURLWithPath: url.path + ".bak")
+  }
+
+  private func formatNumber(_ v: Double) -> String {
+    if v.rounded() == v {
+      return String(Int(v))
+    }
+    return String(v)
+  }
+
+  // MARK: 回退到基线（还原出厂外观配置）
+
+  /// 移除用户级 squirrel.yaml 与设置 app 生成的 custom 文件（先备份 .bak），
+  /// 手改 YAML 的用户文件保持原样不删。
+  public func resetToBaseline() throws -> [URL] {
+    var moved: [URL] = []
+    let candidates = [
+      paths.userSquirrelYaml,
+      paths.userDefaultCustomYaml,
+    ]
+    for url in candidates where fm.fileExists(atPath: url.path) {
+      let bak = backupURL(for: url)
+      try? fm.removeItem(at: bak)
+      try fm.moveItem(at: url, to: bak)
+      moved.append(url)
+    }
+    return moved
+  }
+}
