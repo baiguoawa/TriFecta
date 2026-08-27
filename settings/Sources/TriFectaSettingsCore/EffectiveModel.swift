@@ -39,12 +39,16 @@ public struct GroupColorsValues: Equatable {
   public var red: UInt32
   public var yellow: UInt32
   public var green: UInt32
+  /// 三色分组的触发键：mac keyCode（数字）。默认 50 = ` 键（UI 显示为 ~）。
+  /// 主程序据此拦截该键在候选展开时进入三色的功能。
+  public var triggerKey: Int
 
-  public init(enabled: Bool, red: UInt32, yellow: UInt32, green: UInt32) {
+  public init(enabled: Bool, red: UInt32, yellow: UInt32, green: UInt32, triggerKey: Int = 50) {
     self.enabled = enabled
     self.red = red
     self.yellow = yellow
     self.green = green
+    self.triggerKey = triggerKey
   }
 
   /// 与 sources/SquirrelView.swift 硬编码值一致（0xAABBGGRR：alpha、blue、green、red）
@@ -61,7 +65,6 @@ public struct EffectiveModel {
   public let schemaList: [String]
   /// 用户是否已自定义方案列表（未自定义时显示推荐默认：简中 + 繁中）
   public let schemaListCustomized: Bool
-  public let shiftEnabled: Bool
   /// schemaID -> switchIndex -> 有效 reset（含 schema 默认）
   public let switchResets: [String: [Int: Int]]
   /// schemaID -> 用户 custom 文件里显式声明过 reset 的开关索引（区分"用户已保存"与"schema 默认"）
@@ -104,6 +107,12 @@ public enum RimeModel {
   public static func hexColor(_ node: Node?) -> UInt32? {
     guard let s = node?.string else { return nil }
     return hexColorValue(s)
+  }
+
+  /// 解析整数值（用于 group_colors/trigger_key 这类 keyCode）。
+  public static func intScalar(_ node: Node?) -> Int? {
+    guard let s = node?.string else { return nil }
+    return Int(s.trimmingCharacters(in: .whitespaces))
   }
 
   public static func hexDump(_ value: UInt32) -> String {
@@ -153,7 +162,8 @@ public enum RimeModel {
       enabled: boolScalar(gc?["enabled"]) ?? defaults.enabled,
       red: hexColor(gc?["red"]) ?? defaults.red,
       yellow: hexColor(gc?["yellow"]) ?? defaults.yellow,
-      green: hexColor(gc?["green"]) ?? defaults.green
+      green: hexColor(gc?["green"]) ?? defaults.green,
+      triggerKey: intScalar(gc?["trigger_key"]) ?? defaults.triggerKey
     )
   }
 
@@ -190,22 +200,6 @@ public enum RimeModel {
       return true
     }
     return false
-  }
-
-  /// 有效 Shift 切换中英：用户 patch 优先，否则 SharedSupport 默认（inline_ascii = 开启）
-  public static func readShiftEnabled(paths: ConfigPaths) throws -> Bool {
-    if let patch = try readCustomPatch(paths: paths, fileName: "default.custom.yaml") {
-      // Rime 补丁键是扁平路径键（整串为一个 YAML 键）；兼容嵌套写法
-      if let v = patch["ascii_composer/switch_key/Shift_L"]?.string {
-        return v == "inline_ascii"
-      }
-      if let v = patch["ascii_composer"]?["switch_key"]?["Shift_L"]?.string {
-        return v == "inline_ascii"
-      }
-    }
-    let text = try String(contentsOf: paths.sharedDefaultYaml, encoding: .utf8)
-    let node = try compose(text)
-    return (node["ascii_composer"]?["switch_key"]?["Shift_L"]?.string ?? "inline_ascii") == "inline_ascii"
   }
 
   /// 某 schema 开关的有效 reset（用户 <schema>.custom.yaml 的 "switches/@N/reset" 优先），
@@ -249,7 +243,6 @@ public enum RimeModel {
       schemas: schemas,
       schemaList: schemaList,
       schemaListCustomized: try isSchemaListCustomized(paths: paths),
-      shiftEnabled: try readShiftEnabled(paths: paths),
       switchResets: switchResets,
       userResetPatchKeys: userResetPatchKeys,
       squirrelYamlSource: source,

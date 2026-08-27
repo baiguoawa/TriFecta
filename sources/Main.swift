@@ -71,8 +71,18 @@ struct SquirrelApp {
           return true
         case "--build":
           SquirrelApplicationDelegate.showMessage(msgText: NSLocalizedString("deploy_update", comment: ""))
+          // 与运行时 setupRime() 保持一致，否则部署会把数据写到当前工作目录
+          //（如 SharedSupport/build），而运行时读的是 ~/Library/Rime，导致切到输入法无法打字。
+          do {
+            try FileManager.default.createDirectory(at: SquirrelApp.userDir, withIntermediateDirectories: true)
+          } catch {
+            print("Error creating user data directory: \(SquirrelApp.userDir.path())")
+          }
           var builderTraits = RimeTraits.rimeStructInit()
-          builderTraits.setCString("rime.squirrel-builder", to: \.app_name)
+          builderTraits.setCString(Bundle.main.sharedSupportPath!, to: \.shared_data_dir)
+          builderTraits.setCString(SquirrelApp.userDir.path(), to: \.user_data_dir)
+          builderTraits.setCString("Squirrel", to: \.distribution_code_name)
+          builderTraits.setCString("rime.squirrel", to: \.app_name)
           rimeAPI.setup(&builderTraits)
           rimeAPI.deployer_initialize(nil)
           _ = rimeAPI.deploy()

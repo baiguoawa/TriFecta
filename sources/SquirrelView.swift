@@ -46,6 +46,9 @@ final class SquirrelView: NSView {
     NSColor(calibratedRed: 0.14, green: 0.74, blue: 0.27, alpha: 0.68),   // 绿
   ]
   // 三色分组配色从配置读取：squirrel.yaml 顶层 group_colors（0xAABBGGRR，缺省回退上方硬编码值）
+  // 注意：设置窗口（TriFectaSettings）采用「只写改动的 key」的增量写入，
+  // 因此 group_colors 里可能只包含 red/yellow/green 之一。这里对缺失的色逐个
+  // 回退到硬编码默认值，避免因缺某色而整体不生效，导致"切换颜色后无法应用"。
   private func loadGroupColorsFromConfig() {
     guard let config = NSApp.squirrelAppDelegate.config else { return }
     if config.getBool("group_colors/enabled") == false {
@@ -53,11 +56,15 @@ final class SquirrelView: NSView {
       groupColors = []
       return
     }
-    if let red = config.getColor("group_colors/red", inSpace: .sRGB),
-       let yellow = config.getColor("group_colors/yellow", inSpace: .sRGB),
-       let green = config.getColor("group_colors/green", inSpace: .sRGB) {
-      groupColors = [red, yellow, green]
-    }
+    let defaults = [
+      NSColor(calibratedRed: 0.94, green: 0.20, blue: 0.16, alpha: 0.68),   // 红
+      NSColor(calibratedRed: 0.95, green: 0.72, blue: 0.00, alpha: 0.68),   // 黄
+      NSColor(calibratedRed: 0.14, green: 0.74, blue: 0.27, alpha: 0.68),   // 绿
+    ]
+    let red = config.getColor("group_colors/red", inSpace: .sRGB) ?? defaults[0]
+    let yellow = config.getColor("group_colors/yellow", inSpace: .sRGB) ?? defaults[1]
+    let green = config.getColor("group_colors/green", inSpace: .sRGB) ?? defaults[2]
+    groupColors = [red, yellow, green]
   }
   // 是否显示三色分组（按住 `~` 时打开）
   var showsGroups = false
@@ -316,13 +323,8 @@ final class SquirrelView: NSView {
     // 三色分组：仅在 `~` 开启时，用每组颜色填充候选背景
     if showsGroups {
       if let selG = selectedGroup {
-        // 选中组：其它组变暗，选中组内候选按位置红/黄/绿
-        for (g, path) in candidateGroupPaths.enumerated() {
-          guard let path, g != selG, g < groupColors.count else { continue }
-          let layer = shapeFromPath(path: path)
-          layer.fillColor = groupColors[g].withAlphaComponent(0.30).cgColor
-          panelLayer.addSublayer(layer)
-        }
+        // 选中组：其它组完全褪去（不绘制），只保留选中组内候选按位置红/黄/绿，
+        // 避免变淡后的残留色造成视觉杂乱、对比度不足。
         for (idx, ip) in candidateItemPaths.enumerated() {
           guard let ip, idx < groupColors.count else { continue }
           let layer = shapeFromPath(path: ip)

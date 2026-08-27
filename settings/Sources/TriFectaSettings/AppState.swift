@@ -21,7 +21,6 @@ final class AppState: ObservableObject {
   @Published var style = StyleValues.defaults
   @Published var groupColors = GroupColorsValues.defaults
   @Published var schemaList: [String] = []
-  @Published var shiftEnabled = true
   @Published var customizedResets: [String: [Int: Int]] = [:]
   /// 用户在界面明确切换过的简繁状态（推荐默认未落盘时强制写入用）
   private(set) var userResetOverrides: [String: [Int: Int]] = [:]
@@ -39,7 +38,6 @@ final class AppState: ObservableObject {
     if style != loaded.style { return true }
     if groupColors != loaded.groupColors { return true }
     if schemaList != loaded.schemaList { return true }
-    if shiftEnabled != loaded.shiftEnabled { return true }
     if !userResetOverrides.isEmpty { return true }
     return !diffResets(customizedResets, vs: loaded.switchResets).isEmpty
   }
@@ -51,7 +49,6 @@ final class AppState: ObservableObject {
       style = model.style
       groupColors = model.groupColors
       schemaList = model.schemaList
-      shiftEnabled = model.shiftEnabled
       customizedResets = model.switchResets
       userResetOverrides = [:]
       status = .idle
@@ -66,7 +63,6 @@ final class AppState: ObservableObject {
       style = loaded.style
       groupColors = loaded.groupColors
       schemaList = loaded.schemaList
-      shiftEnabled = loaded.shiftEnabled
       customizedResets = loaded.switchResets
       userResetOverrides = [:]
       status = .idle
@@ -80,7 +76,6 @@ final class AppState: ObservableObject {
     if style != loaded.style { changeSet.style = style }
     if groupColors != loaded.groupColors { changeSet.groupColors = groupColors }
     if schemaList != loaded.schemaList { changeSet.schemaList = schemaList }
-    if shiftEnabled != loaded.shiftEnabled { changeSet.shiftEnabled = shiftEnabled }
     var resetDiff = diffResets(customizedResets, vs: loaded.switchResets)
     // 推荐默认（未自定义方案列表）：默认仅留推荐方案且默认简体（reset=1）。
     // 仅当用户从未显式保存过该开关时推荐才生效；已保存（custom 文件含键）以用户值为准。

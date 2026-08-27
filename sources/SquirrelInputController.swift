@@ -98,10 +98,13 @@ final class SquirrelInputController: IMKInputController {
     case .keyDown:
       let keyCode = event.keyCode
       let candidateCount = NSApp.squirrelAppDelegate.panel?.candidateCount ?? 0
-      // 三色分组 + ～123 递进选字：按住 `~`(keycode 50)，先按 1/2/3 选组，再按 1/2/3 选候选
-      // group_colors/enabled = false（设置窗口「～ 键三色」关闭）时整段跳过，~ 走默认行为
-      if candidateCount > 0, NSApp.squirrelAppDelegate.config?.getBool("group_colors/enabled") ?? true {
-        if keyCode == 50 {
+      // 三色分组 + 触发键 123 递进选字：触发键默认 ` 键(keycode 50, UI 显示 ~)。
+      // 触发键可在设置「快捷键」里改（group_colors/trigger_key = mac keyCode）。
+      // group_colors/enabled = false（设置窗口「～ 键三色」关闭）时整段跳过，触发键走默认行为。
+      let triEnabled = NSApp.squirrelAppDelegate.config?.getBool("group_colors/enabled") ?? true
+      let triTriggerKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/trigger_key") ?? "") ?? 50
+      if candidateCount > 0, triEnabled {
+        if keyCode == triTriggerKey {
           // 三态切换：未开 -> 开三色；已选组 -> 返回选组状态；选组状态 -> 退出
           if !tildeDown {
             tildeDown = true
@@ -115,7 +118,7 @@ final class SquirrelInputController: IMKInputController {
             tildeDown = false
             NSApp.squirrelAppDelegate.panel?.setGroupMode(false)      // 退出三色
           }
-          handled = true   // 吞掉 `~`，不输入到拼音
+          handled = true   // 吞掉触发键，不输入到拼音
           break
         }
         if tildeDown, [18, 19, 20].contains(keyCode) {
@@ -338,6 +341,13 @@ final class SquirrelInputController: IMKInputController {
       .appendingPathComponent("MacOS", isDirectory: true)
       .appendingPathComponent("TriFectaSettings.app", isDirectory: true)
     if FileManager.default.fileExists(atPath: settingsURL.path) {
+      // 设置窗口用 WindowGroup + LSUIElement：窗口关闭后进程常驻，
+      // 再次 NSWorkspace.open 只激活旧进程而不重建窗口，导致"保存退出后无法唤起"。
+      // 打开前先结束残留的设置进程，保证每次都是单实例、全新起窗。
+      let settingsBundleID = "im.rime.inputmethod.Squirrel.settings"
+      for app in NSRunningApplication.runningApplications(withBundleIdentifier: settingsBundleID) {
+        app.terminate()
+      }
       NSWorkspace.shared.open(settingsURL)
     } else {
       openRimeFolder()
