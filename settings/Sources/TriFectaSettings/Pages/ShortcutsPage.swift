@@ -1,8 +1,9 @@
 //
-//  快捷键：～ 键三色分组选词（触发键设置）。
+//  快捷键：三色分组选字 —— 模式切换 + 各模式快捷键设置。
 //
 import SwiftUI
 import AppKit
+import TriFectaSettingsCore
 
 /// 把 mac keyCode 转成用于展示的键名（默认触发键 50 = ` 键，UI 显示为 ~）。
 func keycapDisplay(forKeyCode code: Int) -> String {
@@ -49,7 +50,7 @@ struct TriggerKeyField: View {
     } label: {
       HStack(spacing: 6) {
         KeycapView(text: keycapDisplay(forKeyCode: keyCode), systemImage: "command")
-        Text(isListening ? "请按下触发键" : "点击设置")
+        Text(isListening ? "请按下按键" : "点击设置")
           .font(.system(size: 11))
           .foregroundColor(isListening ? Color.accentColor : .secondary)
         Image(systemName: isListening ? "record.circle" : "keyboard")
@@ -81,25 +82,133 @@ struct TriggerKeyField: View {
   }
 }
 
+/// 三模式滑动切换（触发 / 常驻 / 滑块）。单滑块拖到某档即激活该模式、关闭其余，
+/// 直观体现"同时只有一个模式生效"。拖动/点击整个滑条即可切换，无需精准点文字。
+/// 滑条是"切换器"而非"进度条"，轨道统一无色；滑块中心对齐每一档模式名称的中间。
+struct ModeSwitcher: View {
+  @Binding var mode: TriColorMode
+  @Environment(\.appTheme) private var theme
+
+  private let trackHeight: CGFloat = 4
+  private let thumbSize: CGFloat = 18
+
+  var body: some View {
+    VStack(spacing: 6) {
+      GeometryReader { geo in
+        let trackWidth = geo.size.width
+        let steps = TriColorMode.allCases.count           // 3 档
+        let selectedIndex = TriColorMode.allCases.firstIndex(of: mode) ?? 0
+        // 档位中心对齐三档名称的中间：1/6、3/6、5/6（与下方 label 三等分一致）
+        let centerX = trackWidth * (CGFloat(selectedIndex) + 0.5) / CGFloat(steps)
+
+        ZStack(alignment: .leading) {
+          // 轨道（统一无色/淡色，无"进度"填充）
+          RoundedRectangle(cornerRadius: trackHeight / 2)
+            .fill(Color.primary.opacity(0.14))
+            .frame(height: trackHeight)
+            .frame(maxWidth: .infinity)
+          // 圆形滑块（中心对齐当前档名称）
+          Circle()
+            .fill(Color.white)
+            .frame(width: thumbSize, height: thumbSize)
+            .shadow(color: .black.opacity(0.18), radius: 2, x: 0, y: 1)
+            .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
+            .offset(x: centerX - thumbSize / 2)
+        }
+        .frame(height: thumbSize)   // 可点击/拖动区域
+        .contentShape(Rectangle())
+        .gesture(
+          DragGesture(minimumDistance: 0)
+            .onChanged { value in
+              // 把点击/拖动位置映射到各档中心（1/6、3/6、5/6），落到最近档
+              let t = value.location.x / trackWidth
+              let idx = Int((t * CGFloat(steps) - 0.5).rounded())
+              mode = TriColorMode.allCases[min(max(idx, 0), steps - 1)]
+            }
+        )
+      }
+      .frame(height: thumbSize)
+
+      // 三档标签（点击标签也能切换）
+      HStack(spacing: 0) {
+        ForEach(Array(TriColorMode.allCases.enumerated()), id: \.element) { _, m in
+          Text(m.label)
+            .font(.system(size: 11, weight: mode == m ? .semibold : .regular))
+            .foregroundColor(mode == m ? theme.accent : .secondary)
+            .frame(maxWidth: .infinity)
+            .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { mode = m } }
+        }
+      }
+    }
+  }
+}
+
+extension TriColorMode {
+  var label: String {
+    switch self {
+    case .trigger: return "触发模式"
+    case .dwell: return "常驻模式"
+    case .slider: return "滑块模式"
+    }
+  }
+}
+
 struct ShortcutsPage: View {
   @EnvironmentObject private var state: AppState
 
   var body: some View {
     PageScroll(title: "快捷键") {
-      SettingCard {
-        SettingRow("～ 键三色分组选字") {
-          HStack(spacing: 8) {
-            TriggerKeyField(keyCode: $state.groupColors.triggerKey)
-            Toggle("", isOn: $state.groupColors.enabled)
+      // 顶部：三模式滑块切换
+      ModeSwitcher(mode: $state.groupColors.mode)
+
+      // 下方：仅显示当前模式的快捷键设置
+      switch state.groupColors.mode {
+      case .trigger:
+        SettingCard {
+          SettingRow("～ 键三色分组选字") {
+            HStack(spacing: 8) {
+              TriggerKeyField(keyCode: $state.groupColors.triggerKey)
+              Toggle("", isOn: $state.groupColors.enabled)
+                .toggleStyle(.switch)
+                .labelsHidden()
+            }
+          }
+          SettingRow("", subtitle:
+            "触发键默认为数字 1 左侧的 ` 键（显示为 ~）。点击后按下任意键即可替换触发键；" +
+            "候选展开时，触发键将被拦截并进入三色选字，不再执行它原有的功能。",
+            divider: false) {
+            EmptyView()
+          }
+        }
+
+      case .dwell:
+        SettingCard {
+          SettingRow("常驻模式触发组内选词") {
+            HStack(spacing: 8) {
+              TriggerKeyField(keyCode: $state.groupColors.dwellSecondKey)
+              Text("第2个")
+            }
+          }
+          SettingRow("第3个候选键") {
+            TriggerKeyField(keyCode: $state.groupColors.dwellThirdKey)
+          }
+          SettingRow("进入第2/3组后仍用 `~/tab 选词", divider: false) {
+            Toggle("", isOn: $state.groupColors.dwellUseDefaultKeysInGroup)
               .toggleStyle(.switch)
               .labelsHidden()
           }
         }
-        SettingRow("", subtitle:
-          "触发键默认为数字 1 左侧的 ` 键（显示为 ~）。点击后按下任意键即可替换触发键；" +
-          "候选展开时，触发键将被拦截并进入三色选字，不再执行它原有的功能。",
-          divider: false) {
-          EmptyView()
+
+      case .slider:
+        SettingCard {
+          SettingRow("滑块模式触发键") {
+            TriggerKeyField(keyCode: $state.groupColors.sliderTriggerKey)
+          }
+          SettingRow("", subtitle:
+            "敲入拼音后常驻显示某组二级菜单，按触发键向后滑动一组；滑动到哪组，按 1/2/3 即选该组第 1/2/3 个。",
+            divider: false) {
+            EmptyView()
+          }
         }
       }
     }

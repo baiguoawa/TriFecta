@@ -101,9 +101,11 @@ final class SquirrelInputController: IMKInputController {
       // 三色分组 + 触发键 123 递进选字：触发键默认 ` 键(keycode 50, UI 显示 ~)。
       // 触发键可在设置「快捷键」里改（group_colors/trigger_key = mac keyCode）。
       // group_colors/enabled = false（设置窗口「～ 键三色」关闭）时整段跳过，触发键走默认行为。
+      // 本阶段仅「触发模式(trigger)」生效；常驻(dwell)/滑块(slider)逻辑后续实现。
       let triEnabled = NSApp.squirrelAppDelegate.config?.getBool("group_colors/enabled") ?? true
+      let triMode = NSApp.squirrelAppDelegate.config?.getString("group_colors/mode") ?? "trigger"
       let triTriggerKey = Int(NSApp.squirrelAppDelegate.config?.getString("group_colors/trigger_key") ?? "") ?? 50
-      if candidateCount > 0, triEnabled {
+      if candidateCount > 0, triEnabled, triMode == "trigger" {
         if keyCode == triTriggerKey {
           // 三态切换：未开 -> 开三色；已选组 -> 返回选组状态；选组状态 -> 退出
           if !tildeDown {
