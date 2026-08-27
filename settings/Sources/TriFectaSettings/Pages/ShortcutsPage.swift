@@ -204,8 +204,12 @@ struct ShortcutsPage: View {
           SettingRow("滑块模式触发键") {
             TriggerKeyField(keyCode: $state.groupColors.sliderTriggerKey)
           }
+          SettingRow("滑块模式回退键") {
+            TriggerKeyField(keyCode: $state.groupColors.sliderBackKey)
+          }
           SettingRow("", subtitle:
-            "敲入拼音后常驻显示某组二级菜单，按触发键向后滑动一组；滑动到哪组，按 1/2/3 即选该组第 1/2/3 个。",
+            "触发键默认为数字 1 左侧的 ` 键（显示为 ~），回退键默认为 Tab。敲入拼音后常驻显示某组二级菜单，" +
+            "按触发键向后滑动一组、按回退键返回上一组；滑动到哪组，按 1/2/3 即选该组第 1/2/3 个。",
             divider: false) {
             EmptyView()
           }

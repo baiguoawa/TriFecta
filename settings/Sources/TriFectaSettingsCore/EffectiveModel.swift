@@ -59,6 +59,8 @@ public struct GroupColorsValues: Equatable {
   public var dwellUseDefaultKeysInGroup: Bool
   /// 滑块模式：触发键（默认 50 = ` 键，UI 显示 ~）。
   public var sliderTriggerKey: Int
+  /// 滑块模式：回退键（返回上一组，默认 48 = Tab）。
+  public var sliderBackKey: Int
 
   public init(enabled: Bool, red: UInt32, yellow: UInt32, green: UInt32,
               triggerKey: Int = 50,
@@ -66,7 +68,8 @@ public struct GroupColorsValues: Equatable {
               dwellSecondKey: Int = 50,
               dwellThirdKey: Int = 48,
               dwellUseDefaultKeysInGroup: Bool = false,
-              sliderTriggerKey: Int = 50) {
+              sliderTriggerKey: Int = 50,
+              sliderBackKey: Int = 48) {
     self.enabled = enabled
     self.red = red
     self.yellow = yellow
@@ -77,6 +80,7 @@ public struct GroupColorsValues: Equatable {
     self.dwellThirdKey = dwellThirdKey
     self.dwellUseDefaultKeysInGroup = dwellUseDefaultKeysInGroup
     self.sliderTriggerKey = sliderTriggerKey
+    self.sliderBackKey = sliderBackKey
   }
 
   /// 与 sources/SquirrelView.swift 硬编码值一致（0xAABBGGRR：alpha、blue、green、red）
@@ -196,7 +200,8 @@ public enum RimeModel {
       dwellSecondKey: intScalar(gc?["dwell_second_key"]) ?? defaults.dwellSecondKey,
       dwellThirdKey: intScalar(gc?["dwell_third_key"]) ?? defaults.dwellThirdKey,
       dwellUseDefaultKeysInGroup: boolScalar(gc?["dwell_use_default_keys_in_group"]) ?? defaults.dwellUseDefaultKeysInGroup,
-      sliderTriggerKey: intScalar(gc?["slider_trigger_key"]) ?? defaults.sliderTriggerKey
+      sliderTriggerKey: intScalar(gc?["slider_trigger_key"]) ?? defaults.sliderTriggerKey,
+      sliderBackKey: intScalar(gc?["slider_back_key"]) ?? defaults.sliderBackKey
     )
   }
 

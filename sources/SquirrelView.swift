@@ -322,7 +322,7 @@ final class SquirrelView: NSView {
     }
     // 三色分组：仅在 `~` 开启时，用每组颜色填充候选背景
     if showsGroups {
-      if let selG = selectedGroup {
+      if selectedGroup != nil {
         // 选中组：其它组完全褪去（不绘制），只保留选中组内候选按位置红/黄/绿，
         // 避免变淡后的残留色造成视觉杂乱、对比度不足。
         for (idx, ip) in candidateItemPaths.enumerated() {

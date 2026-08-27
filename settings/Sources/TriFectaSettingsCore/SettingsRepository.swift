@@ -88,6 +88,7 @@ public final class SettingsRepository {
         if cur.dwellThirdKey != gc.dwellThirdKey { vals.append(("dwell_third_key", .number(String(gc.dwellThirdKey)))) }
         if cur.dwellUseDefaultKeysInGroup != gc.dwellUseDefaultKeysInGroup { vals.append(("dwell_use_default_keys_in_group", .bool(gc.dwellUseDefaultKeysInGroup))) }
         if cur.sliderTriggerKey != gc.sliderTriggerKey { vals.append(("slider_trigger_key", .number(String(gc.sliderTriggerKey)))) }
+        if cur.sliderBackKey != gc.sliderBackKey { vals.append(("slider_back_key", .number(String(gc.sliderBackKey)))) }
         if !vals.isEmpty {
           try editor.setSectionValues(section: "group_colors", values: vals)
         }
@@ -165,6 +166,7 @@ public final class SettingsRepository {
       try assertWritten("group_colors/dwell_third_key", before: before.dwellThirdKey, expected: gc.dwellThirdKey, after: after.dwellThirdKey)
       try assertWritten("group_colors/dwell_use_default_keys_in_group", before: before.dwellUseDefaultKeysInGroup, expected: gc.dwellUseDefaultKeysInGroup, after: after.dwellUseDefaultKeysInGroup)
       try assertWritten("group_colors/slider_trigger_key", before: before.sliderTriggerKey, expected: gc.sliderTriggerKey, after: after.sliderTriggerKey)
+      try assertWritten("group_colors/slider_back_key", before: before.sliderBackKey, expected: gc.sliderBackKey, after: after.sliderBackKey)
     }
   }
 
