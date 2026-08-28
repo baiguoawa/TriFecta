@@ -19,6 +19,9 @@ if [ -z "${RIME_NO_PREBUILD}" ]; then
     /usr/bin/sudo -u "${login_user}" "${squirrel_executable}" --build
     popd > /dev/null
 fi && (
+    # 只启用输入源，不自动选中/启动。
+    # 若在此 --select-input-source，会以安装器(非 GUI 会话)环境把 Squirrel 进程拉起，
+    # 得到一个连不上正常会话的「半死」实例并常驻；用户随后切换「鼠鬚管」时会复用它，
+    # 导致不弹候选框、吞键盘、点图标无设置，直到重启才恢复正常。
     /usr/bin/sudo -u "${login_user}" "${squirrel_executable}" --enable-input-source
-    /usr/bin/sudo -u "${login_user}" "${squirrel_executable}" --select-input-source
 )
