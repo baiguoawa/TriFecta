@@ -12,8 +12,11 @@ rime_shared_data_path="${squirrel_app_root}/Contents/SharedSupport"
 "${squirrel_executable}" --register-input-source
 
 if [ -z "${RIME_NO_PREBUILD}" ]; then
+    # 以登录用户身份部署 Rime 数据：让用户输入数据(~/)在安装时即被构建，
+    # 避免首次真正使用输入法时 Squirrel 现场重建导致约 30 秒冷启动等待。
+    # (若以 root 运行，会写到 /var/root/...，用户数据不会更新，触发首次懒重建。)
     pushd "${rime_shared_data_path}" > /dev/null
-    "${squirrel_executable}" --build
+    /usr/bin/sudo -u "${login_user}" "${squirrel_executable}" --build
     popd > /dev/null
 fi && (
     /usr/bin/sudo -u "${login_user}" "${squirrel_executable}" --enable-input-source
