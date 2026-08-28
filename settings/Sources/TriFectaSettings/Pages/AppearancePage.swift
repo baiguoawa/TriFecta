@@ -90,6 +90,25 @@ struct AppearancePage: View {
       }
 
       SettingCard {
+        SettingRow("候选框液态玻璃",
+                   subtitle: "左＝完全液态玻璃，右＝完全不透明（微微发白保证对比）",
+                   icon: "circle.lefthalf.filled",
+                   divider: false) {
+          HStack(spacing: 8) {
+            Image(systemName: "circle.lefthalf.filled")
+              .font(.system(size: 12))
+              .foregroundColor(.secondary)
+            Slider(value: $state.style.glassOpacity, in: 0...1)
+              .frame(width: 150)
+            Image(systemName: "circle.fill")
+              .font(.system(size: 12))
+              .foregroundColor(.secondary)
+          }
+          .frame(width: 200)
+        }
+      }
+
+      SettingCard {
         SettingRow("三色分组配色",
                    subtitle: "候选多时按 ～ 键分组选字（红/黄/绿）") {
           Toggle("启用", isOn: $state.groupColors.enabled)

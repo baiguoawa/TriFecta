@@ -74,6 +74,9 @@ public final class SettingsRepository {
         if cur.candidateFormat != style.candidateFormat {
           try editor.setScalar(section: "style", keyText: "candidate_format", value: .string(style.candidateFormat))
         }
+        if cur.glassOpacity != style.glassOpacity {
+          try editor.setScalar(section: "style", keyText: "glass_opacity", value: .number(formatNumber(style.glassOpacity)))
+        }
       }
       if let gc = changes.groupColors {
         let cur = RimeModel.readGroupColors(effective)
@@ -152,6 +155,7 @@ public final class SettingsRepository {
       try assertWritten("style/font_face", before: before.fontFace, expected: style.fontFace, after: after.fontFace)
       try assertWritten("style/font_point", before: before.fontPoint, expected: style.fontPoint, after: after.fontPoint)
       try assertWritten("style/candidate_format", before: before.candidateFormat, expected: style.candidateFormat, after: after.candidateFormat)
+      try assertWritten("style/glass_opacity", before: before.glassOpacity, expected: style.glassOpacity, after: after.glassOpacity)
     }
     if let gc = changes.groupColors {
       let before = RimeModel.readGroupColors(effective)

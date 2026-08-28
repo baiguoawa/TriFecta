@@ -291,8 +291,8 @@ final class SquirrelView: NSView {
       }
     }
     let panelLayer = shapeFromPath(path: backPath)
-    // 开启 translucency 时背景涂透明，露出底层 NSGlassEffectView 的液态玻璃效果
-    panelLayer.fillColor = theme.translucency ? NSColor.clear.cgColor : theme.backgroundColor.cgColor
+    // 连续无极控制：glassOpacity=0 → 全透明(露出液态玻璃)，=1 → 不透明(微微发白的底色)
+    panelLayer.fillColor = theme.panelBackgroundColor.withAlphaComponent(theme.glassOpacity).cgColor
     let panelLayerMask = shapeFromPath(path: backgroundPath)
     panelLayer.mask = panelLayerMask
     self.layer?.addSublayer(panelLayer)
