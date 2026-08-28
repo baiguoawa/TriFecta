@@ -88,18 +88,40 @@ struct TriggerKeyField: View {
 struct ModeSwitcher: View {
   @Binding var mode: TriColorMode
   @Environment(\.appTheme) private var theme
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private let trackHeight: CGFloat = 4
   private let thumbSize: CGFloat = 18
+  private let steps = TriColorMode.allCases.count
+
+  @State private var dragFraction: Double?
+  @State private var isDragging = false
+  @State private var lastSampleX: CGFloat = 0
+  @State private var lastSampleTime: TimeInterval = 0
+  @State private var releaseVelocity: CGFloat = 0
+
+  private var selectedIndex: Int {
+    TriColorMode.allCases.firstIndex(of: mode) ?? 0
+  }
+
+  private func centerFraction(of index: Int) -> Double {
+    (Double(index) + 0.5) / Double(steps)
+  }
+
+  private var settleSpring: Animation {
+    reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.35, dampingFraction: 0.8)
+  }
+
+  private var neutralSpring: Animation {
+    reduceMotion ? .linear(duration: 0.12) : .spring(response: 0.3, dampingFraction: 1.0)
+  }
 
   var body: some View {
     VStack(spacing: 6) {
       GeometryReader { geo in
-        let trackWidth = geo.size.width
-        let steps = TriColorMode.allCases.count           // 3 档
-        let selectedIndex = TriColorMode.allCases.firstIndex(of: mode) ?? 0
-        // 档位中心对齐三档名称的中间：1/6、3/6、5/6（与下方 label 三等分一致）
-        let centerX = trackWidth * (CGFloat(selectedIndex) + 0.5) / CGFloat(steps)
+        let width = geo.size.width
+        let fraction = dragFraction ?? centerFraction(of: selectedIndex)
+        let x = width * CGFloat(fraction)
 
         ZStack(alignment: .leading) {
           // 轨道（统一无色/淡色，无"进度"填充）
@@ -107,25 +129,24 @@ struct ModeSwitcher: View {
             .fill(Color.primary.opacity(0.14))
             .frame(height: trackHeight)
             .frame(maxWidth: .infinity)
-          // 圆形滑块（中心对齐当前档名称）
+
           Circle()
             .fill(Color.white)
             .frame(width: thumbSize, height: thumbSize)
-            .shadow(color: .black.opacity(0.18), radius: 2, x: 0, y: 1)
+            .shadow(
+              color: .black.opacity(isDragging ? 0.28 : 0.18),
+              radius: isDragging ? 4 : 2,
+              x: 0, y: isDragging ? 3 : 1
+            )
             .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 0.5))
-            .offset(x: centerX - thumbSize / 2)
+            .scaleEffect(isDragging ? 1.15 : 1.0)
+            .offset(x: x - thumbSize / 2)
+            .animation(neutralSpring, value: isDragging)
+            .animation(isDragging ? nil : settleSpring, value: x)
         }
         .frame(height: thumbSize)   // 可点击/拖动区域
         .contentShape(Rectangle())
-        .gesture(
-          DragGesture(minimumDistance: 0)
-            .onChanged { value in
-              // 把点击/拖动位置映射到各档中心（1/6、3/6、5/6），落到最近档
-              let t = value.location.x / trackWidth
-              let idx = Int((t * CGFloat(steps) - 0.5).rounded())
-              mode = TriColorMode.allCases[min(max(idx, 0), steps - 1)]
-            }
-        )
+        .gesture(slideGesture(width: width))
       }
       .frame(height: thumbSize)
 
@@ -136,10 +157,57 @@ struct ModeSwitcher: View {
             .font(.system(size: 11, weight: mode == m ? .semibold : .regular))
             .foregroundColor(mode == m ? theme.accent : .secondary)
             .frame(maxWidth: .infinity)
-            .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { mode = m } }
+            .onTapGesture { withAnimation(neutralSpring) { mode = m } }
         }
       }
+      .animation(neutralSpring, value: mode)
     }
+  }
+
+  private func slideGesture(width: CGFloat) -> some Gesture {
+    DragGesture(minimumDistance: 0)
+      .onChanged { value in
+        let now = Date.timeIntervalSinceReferenceDate
+        if !isDragging {
+          isDragging = true
+          lastSampleX = value.location.x
+          lastSampleTime = now
+          releaseVelocity = 0
+        }
+        let dt = now - lastSampleTime
+        if dt > 0.0005 {
+          releaseVelocity = (value.location.x - lastSampleX) / CGFloat(dt)
+          lastSampleX = value.location.x
+          lastSampleTime = now
+        }
+        let raw = value.location.x / width
+        dragFraction = Double(rubberbanded(raw))
+        updateMode(for: raw)
+      }
+      .onEnded { value in
+        isDragging = false
+        let raw = value.location.x / width
+        let projected = raw + Double(releaseVelocity) / 1000 * 0.98 / (1 - 0.98) / Double(width)
+        updateMode(for: projected)
+        dragFraction = nil
+        releaseVelocity = 0
+      }
+  }
+
+  private func updateMode(for rawFraction: Double) {
+    let idx = Int((rawFraction * Double(steps) - 0.5).rounded())
+    let clamped = min(max(idx, 0), steps - 1)
+    let target = TriColorMode.allCases[clamped]
+    if target != mode {
+      mode = target
+    }
+  }
+
+  private func rubberbanded(_ fraction: Double) -> Double {
+    let c = 0.55
+    if fraction < 0 { return -(fraction * c / (1 + c * abs(fraction))) }
+    if fraction > 1 { return 1 + (fraction - 1) * c / (1 + c * abs(fraction - 1)) }
+    return fraction
   }
 }
 
