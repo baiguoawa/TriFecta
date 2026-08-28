@@ -63,6 +63,9 @@ final class SquirrelTheme {
   private(set) var alpha: CGFloat = 1
 
   private(set) var translucency = false
+  /// 候选框液态玻璃程度（0=完全液态玻璃（透明底、露出玻璃模糊），1=完全不透明）。
+  /// 由 style/glass_opacity 覆盖；未设置时按 translucency 推导（true→0，false→1）。
+  private(set) var glassOpacity: CGFloat = 0
   private(set) var mutualExclusive = false
   private(set) var linear = false
   private(set) var vertical = false
@@ -206,6 +209,18 @@ final class SquirrelTheme {
     }
   }
 
+  /// 候选框面板的底色（不透明端使用）：把方案背景朝白色拉近一点，
+  /// 让「玻璃感变弱」时背景微微发白、保持对比度，而不是纯黑/纯透明。
+  var panelBackgroundColor: NSColor {
+    let base = backgroundColor
+    guard let c = base.usingColorSpace(.sRGB) else { return base }
+    let t: CGFloat = 0.15   // 朝白色拉近 15%
+    return NSColor(srgbRed: c.redComponent * (1 - t) + t,
+                   green: c.greenComponent * (1 - t) + t,
+                   blue: c.blueComponent * (1 - t) + t,
+                   alpha: c.alphaComponent)
+  }
+
   func load(config: SquirrelConfig, dark: Bool) {
     linear ?= config.getString("style/candidate_list_layout").map { $0 == "linear" }
     vertical ?= config.getString("style/text_orientation").map { $0 == "vertical" }
@@ -304,6 +319,13 @@ final class SquirrelTheme {
     self.commentFontSize = commentFontSize
     preeditFonts = decodeFonts(from: preeditFontName ?? fontName)
     self.preeditFontSize = preeditFontSize
+
+    // 液态玻璃程度：默认按 translucency 推导（true→0 全玻璃，false→1 不透明），
+    // style/glass_opacity 提供连续无极覆盖。
+    glassOpacity = translucency ? 0 : 1
+    if let v = config.getDouble("style/glass_opacity") {
+      glassOpacity = max(0, min(1, CGFloat(v)))
+    }
   }
 }
 

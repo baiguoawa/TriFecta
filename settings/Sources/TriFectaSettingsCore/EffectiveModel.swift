@@ -16,15 +16,20 @@ public struct StyleValues: Equatable {
   public var fontFace: String
   public var fontPoint: Double
   public var candidateFormat: String
+  /// 候选框液态玻璃程度：0=完全液态玻璃（透明底、露玻璃模糊），1=完全不透明（微微发白）。
+  /// 连续无极取值，写入 style/glass_opacity。
+  public var glassOpacity: Double
 
   public init(colorScheme: String, candidateListLayout: String, textOrientation: String,
-              fontFace: String, fontPoint: Double, candidateFormat: String) {
+              fontFace: String, fontPoint: Double, candidateFormat: String,
+              glassOpacity: Double = 0) {
     self.colorScheme = colorScheme
     self.candidateListLayout = candidateListLayout
     self.textOrientation = textOrientation
     self.fontFace = fontFace
     self.fontPoint = fontPoint
     self.candidateFormat = candidateFormat
+    self.glassOpacity = glassOpacity
   }
 
   /// 与 SharedSupport 基线一致的缺省 UI 值（readStyle 回退与 AppState 初始快照共用）
@@ -174,9 +179,11 @@ public enum RimeModel {
     let fontFace = style?["font_face"]?.string ?? d.fontFace
     let fontPoint = style?["font_point"]?.float.map { $0 } ?? style?["font_point"]?.int.map { Double($0) } ?? d.fontPoint
     let format = style?["candidate_format"]?.string ?? d.candidateFormat
+    let glass = style?["glass_opacity"]?.float.map { Double($0) } ?? d.glassOpacity
     return StyleValues(colorScheme: schemeID, candidateListLayout: layout,
                        textOrientation: orientation, fontFace: fontFace,
-                       fontPoint: fontPoint, candidateFormat: format)
+                       fontPoint: fontPoint, candidateFormat: format,
+                       glassOpacity: max(0, min(1, glass)))
   }
 
   public static func readColorSchemes(_ node: Node) -> [(id: String, name: String)] {
