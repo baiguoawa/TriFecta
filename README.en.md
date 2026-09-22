@@ -46,42 +46,15 @@ Get the package that fits your setup from [GitHub Releases](https://github.com/t
 | Method | Who it's for | Notes |
 | --- | --- | --- |
 | **`.pkg`** (recommended) | Regular users | Signed + notarized, double-click to install, auto-registers the input source / deploys the Rime schema / enables & selects it |
-| **`.dmg`** | Backup / manual install | One-line terminal install; the script strips quarantine and registers everything |
 | **Build from source** | Developers | `make release` / `make package`, see below |
 
-**Method A: `.pkg` (recommended)**
+**Install the `.pkg` (recommended)**
 
 1. Download and open `TriFecta.pkg`;
 2. Follow the installer wizard and enter your admin password;
 3. After installation, **Squirrel (鼠鬚管) appears automatically** under System Settings → Keyboard → Input Sources. Switch to Squirrel with `⌃Control + Space` and start typing.
 
 > If the input source list doesn't refresh after installation, log out and back in once (HIToolbox cache refresh).
-
-<details>
-<summary><b>Method B: `.dmg` step-by-step</b></summary>
-<br>
-
-> Note: do NOT double-click `安装.command` or Squirrel.app — the app is ad-hoc signed, and macOS will block it on double-click.
-
-Download the dmg and double-click to open it (mounted at /Volumes/TriFecta), then open Terminal and paste:
-
-```bash
-cd /Volumes/TriFecta
-sudo bash 安装.command
-```
-
-The script will: strip quarantine → copy to `/Library/Input Methods` → register the input source → build the Rime schema data → enable and select. You only enter your login password once; you're done when you see `✔ 安装完成！`. (Building the schema data takes about 10–60 seconds — the window may look frozen, that's normal, don't close it.)
-
-If it's still blocked (with a `com.apple.quarantine` message), clear it once manually before running:
-
-```bash
-xattr -dr com.apple.quarantine /Volumes/TriFecta/安装.command 2>/dev/null
-cd /Volumes/TriFecta && sudo bash 安装.command
-```
-
-After installation: System Settings → Keyboard → Input Sources → click “+” → search “Squirrel” (or “鼠鬚管”) → Add, then switch to Squirrel with `⌃Control + Space`.
-
-</details>
 
 <details>
 <summary><b>Uninstall</b></summary>
