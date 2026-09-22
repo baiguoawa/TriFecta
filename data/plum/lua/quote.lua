@@ -28,12 +28,12 @@ end
 
 function quote.func(key, env)
   if key:release() then
-    return 1  -- kNoop
+    return 2  -- kNoop
   end
   local repr = key:repr()
   local m = map(repr) or map(string.lower(repr or ""))
   if not m then
-    return 1  -- kNoop，继续后续处理器（非引号键）
+    return 2  -- kNoop，继续后续处理器（非引号键）
   end
 
   local t = os.clock()
@@ -45,7 +45,7 @@ function quote.func(key, env)
   state[m.entry] = shouldLeft
 
   env.engine:commit_text(shouldLeft and m.left or m.right)
-  return 0  -- kAccepted，消费该键
+  return 1  -- kAccepted，消费该键
 end
 
 return quote
