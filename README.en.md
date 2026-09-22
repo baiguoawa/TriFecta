@@ -90,18 +90,16 @@ After installation: System Settings → Keyboard → Input Sources → click “
 Run the following in Terminal for a clean removal:
 
 ```bash
-sudo bash -c '
 echo ">>> 1. Disable input source"
 "/Library/Input Methods/Squirrel.app/Contents/MacOS/Squirrel" --disable-input-source 2>/dev/null || echo "  (skipped: nothing to disable)"
 echo ">>> 2. Kill Squirrel processes"
 pkill -9 -f "Squirrel" 2>/dev/null || echo "  (no processes)"
 sleep 1
 echo ">>> 3. Remove installed app"
-rm -rf "/Library/Input Methods/Squirrel.app"
+sudo rm -rf -- "/Library/Input Methods/Squirrel.app"
 echo ">>> 4. Verify"
 if [ -d "/Library/Input Methods/Squirrel.app" ]; then echo "  ✘ still exists"; else echo "  ✔ removed"; fi
 echo ">>> Done"
-'
 ```
 
 To fully clear your usage habits / dictionary after uninstalling, also run `rm -rf ~/Library/Rime`.
