@@ -1,0 +1,58 @@
+#!/bin/bash
+set -euo pipefail
+
+source_app=${1:?source application is required}
+destination_root=${2:?destination directory is required}
+destination_app="${destination_root}/Squirrel.app"
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "install_app must be run as root" >&2
+  exit 1
+fi
+if [[ ! -d ${source_app} || -L ${source_app} ]]; then
+  echo "source application must be a directory, not a symbolic link: ${source_app}" >&2
+  exit 1
+fi
+if [[ ! -d ${destination_root} || -L ${destination_root} ]]; then
+  echo "destination must be an existing directory, not a symbolic link: ${destination_root}" >&2
+  exit 1
+fi
+if [[ -L ${destination_app} ]]; then
+  echo "refusing to replace symbolic link: ${destination_app}" >&2
+  exit 1
+fi
+
+# Secure the shared directory itself without changing any unrelated input method.
+chown root:wheel "${destination_root}"
+chmod go-w "${destination_root}"
+if [[ -L ${destination_root} || -L ${destination_app} ]]; then
+  echo "destination became a symbolic link while preparing installation" >&2
+  exit 1
+fi
+
+staged_app=$(mktemp -d "${destination_root}/.Squirrel.app.new.XXXXXX")
+backup_app=""
+cleanup() {
+  status=$?
+  if [[ ${status} -ne 0 && -n ${backup_app} && -e ${backup_app} && ! -e ${destination_app} ]]; then
+    mv "${backup_app}" "${destination_app}"
+  fi
+  [[ ! -e ${staged_app} ]] || rm -rf "${staged_app}"
+  exit "${status}"
+}
+trap cleanup EXIT
+
+rmdir "${staged_app}"
+cp -R "${source_app}" "${staged_app}"
+chown -R root:wheel "${staged_app}"
+chmod -R go-w "${staged_app}"
+
+# Keep the replacement and rollback paths on the destination filesystem.
+if [[ -e ${destination_app} ]]; then
+  backup_app=$(mktemp -d "${destination_root}/.Squirrel.app.old.XXXXXX")
+  rmdir "${backup_app}"
+  mv "${destination_app}" "${backup_app}"
+fi
+mv "${staged_app}" "${destination_app}"
+[[ -z ${backup_app} ]] || rm -rf "${backup_app}"
+backup_app=""
