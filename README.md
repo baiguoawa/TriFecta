@@ -46,10 +46,9 @@
 | 安装方式 | 推荐场景 | 说明 |
 | --- | --- | --- |
 | **`.pkg`**（推荐） | 普通用户 | 已签名 + 公证，双击即装，自动完成输入源注册 / Rime 方案部署 / 启用选中 |
-| **`.dmg`** | 备用 / 手动安装 | 终端一行命令完成安装，脚本自动剥离隔离属性并注册 |
 | **源码构建** | 开发者 | `make release` / `make package`，见下文 |
 
-**方式 A：`.pkg`（推荐）**
+**`.pkg` 安装（推荐）**
 
 1. 下载并打开 `TriFecta.pkg`；
 2. 按安装向导输入管理员密码；
@@ -57,31 +56,8 @@
 
 > 若安装后系统输入法列表未刷新，注销重登一次即可（HIToolbox 缓存刷新）。
 
-<details>
-<summary><b>方式 B：`.dmg` 安装详细步骤</b></summary>
-<br>
-
-> 注意：不要双击 `安装.command` 或 Squirrel.app —— App 是 ad-hoc 签名，双击会被 macOS 拦截。
-
-下载本 dmg，双击打开（挂载到 /Volumes/TriFecta），打开终端粘贴运行：
-
-```bash
-cd /Volumes/TriFecta
-sudo bash 安装.command
-```
-
-脚本会自动：剥离隔离属性 → 复制到 `/Library/Input Methods` → 注册输入源 → 构建 Rime 方案数据 → 启用并选中。全程只需输一次登录密码，看到 `✔ 安装完成！` 即成功。（构建方案数据约 10~60 秒，窗口看似卡住是正常的，别关。）
-
-若仍被拦（提示 `com.apple.quarantine`），先手动清一次再运行：
-
-```bash
-xattr -dr com.apple.quarantine /Volumes/TriFecta/安装.command 2>/dev/null
-cd /Volumes/TriFecta && sudo bash 安装.command
-```
-
-安装后：系统设置 → 键盘 → 输入法 → 点 “+” → 搜索 “Squirrel”（或“鼠鬚管”）→ 添加，用 `⌃Control + 空格` 切到 Squirrel。
-
-</details>
+> 为确保安装包来源可信，仅支持通过 Releases 发布的、经 Developer ID 签名并公证的 `.pkg`。
+> 如果 macOS 无法验证安装包，请勿移除隔离属性或使用 `sudo` 执行安装脚本；请重新从上述 Releases 链接下载。
 
 <details>
 <summary><b>卸载</b></summary>
