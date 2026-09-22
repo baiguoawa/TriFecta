@@ -25,11 +25,17 @@ fi
 
 CONFIG="${1:-release}"
 ROOT="$(pwd)"
-SCRATCH="${SCT_SCRATCH:-/tmp/trifecta-settings-build-$(id -u)}"
-WORK="/tmp/TriFectaSettings-build-$(id -u)"
+PRIVATE_ROOT="$(mktemp -d /tmp/trifecta-settings-build.XXXXXXXXXX)"
+chmod 700 "$PRIVATE_ROOT"
+cleanup() {
+  rm -rf -- "$PRIVATE_ROOT"
+}
+trap cleanup EXIT
+
+SCRATCH="$PRIVATE_ROOT/swiftpm"
+WORK="$PRIVATE_ROOT/staging"
 STAGE="$WORK/TriFectaSettings.app"
 
-rm -rf "$WORK"
 mkdir -p "$WORK" "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 
 swift build -c "$CONFIG" --scratch-path "$SCRATCH" >/dev/null
