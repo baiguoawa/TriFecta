@@ -66,18 +66,16 @@
 在终端运行以下命令即可干净移除：
 
 ```bash
-sudo bash -c '
 echo ">>> 1. 禁用输入源"
 "/Library/Input Methods/Squirrel.app/Contents/MacOS/Squirrel" --disable-input-source 2>/dev/null || echo "  (跳过:无可禁用)"
 echo ">>> 2. 杀掉 Squirrel 进程"
 pkill -9 -f "Squirrel" 2>/dev/null || echo "  (无进程)"
 sleep 1
 echo ">>> 3. 删除已装 App"
-rm -rf "/Library/Input Methods/Squirrel.app"
+sudo rm -rf -- "/Library/Input Methods/Squirrel.app"
 echo ">>> 4. 验证"
 if [ -d "/Library/Input Methods/Squirrel.app" ]; then echo "  ✘ 仍存在"; else echo "  ✔ 已删除"; fi
 echo ">>> 完成"
-'
 ```
 
 卸载后如需彻底清空使用习惯/词库，可再执行 `rm -rf ~/Library/Rime`。
