@@ -156,22 +156,16 @@ archive: package package/sign_update
 	bash package/make_archive
 
 DSTROOT = /Library/Input Methods
-SQUIRREL_APP_ROOT = $(DSTROOT)/Squirrel.app
 
-.PHONY: permission-check install-debug install-release
+.PHONY: install-debug install-release
 
-permission-check:
-	[ -w "$(DSTROOT)" ] && [ -w "$(SQUIRREL_APP_ROOT)" ] || sudo chown -R ${USER} "$(DSTROOT)"
+install-debug: debug
+	sudo bash scripts/install_app "$(DERIVED_DATA_PATH)/Build/Products/Debug/Squirrel.app" "$(DSTROOT)"
+	sudo DSTROOT="$(DSTROOT)" RIME_NO_PREBUILD=1 bash scripts/postinstall
 
-install-debug: debug permission-check
-	rm -rf "$(SQUIRREL_APP_ROOT)"
-	cp -R $(DERIVED_DATA_PATH)/Build/Products/Debug/Squirrel.app "$(DSTROOT)"
-	DSTROOT="$(DSTROOT)" RIME_NO_PREBUILD=1 bash scripts/postinstall
-
-install-release: release permission-check
-	rm -rf "$(SQUIRREL_APP_ROOT)"
-	cp -R $(DERIVED_DATA_PATH)/Build/Products/Release/Squirrel.app "$(DSTROOT)"
-	DSTROOT="$(DSTROOT)" bash scripts/postinstall
+install-release: release
+	sudo bash scripts/install_app "$(DERIVED_DATA_PATH)/Build/Products/Release/Squirrel.app" "$(DSTROOT)"
+	sudo DSTROOT="$(DSTROOT)" bash scripts/postinstall
 
 .PHONY: clean clean-deps
 
